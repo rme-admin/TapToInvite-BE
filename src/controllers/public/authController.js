@@ -70,6 +70,116 @@ exports.register = async (req, res) => {
     }
 };
 
+// 4. FORGOT PASSWORD (Placeholder)
+
+// 4. FORGOT PASSWORD
+exports.forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        // 1. Check if user exists
+        const user = await prisma.user.findUnique({ where: { email } });
+
+        // Security: Send generic message if user not found
+        if (!user) {
+            return res.status(200).json({
+                success: true,
+                message: "A password reset link has been sent to your email. It is valid for 12 hours."
+            });
+        }
+
+        // 2. Generate a secure reset token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+
+        // 3. Set expiry for 12 hours from now
+        const expiry = new Date();
+        expiry.setHours(expiry.getHours() + 12);
+
+        // 4. Save to Database
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                reset_token: resetToken,
+                reset_token_expiry: expiry
+            }
+        });
+
+        // 5. Send Email Logic
+        const frontendUrl = await getConfig('frontend_url') || 'http://localhost:9002';
+        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+        const emailHtml = `<h2>Password Reset Request</h2><p>Click <a href="${resetLink}">here</a> to reset your password. This link is valid for 12 hours.</p>`;
+
+        await sendEmail({
+            email: user.email,
+            subject: "Reset your TapToInvite password",
+            message: emailHtml
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "A password reset link has been sent to your email. It is valid for 12 hours."
+        });
+    } catch (error) {
+        console.error("Forgot Password Error:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+// 5. RESET PASSWORD (Placeholder)
+
+// 5. RESET PASSWORD
+exports.resetPassword = async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+
+        // 1. Find user with this token and check if it has NOT expired
+        const user = await prisma.user.findFirst({
+            where: {
+                reset_token: token,
+                reset_token_expiry: {
+                    gt: new Date()
+                }
+            }
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired reset link. Please request a new one."
+            });
+        }
+
+        // 2. Hash the new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // 3. Update password and clear the reset fields
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                password_hash: hashedPassword,
+                reset_token: null,
+                reset_token_expiry: null
+            }
+        });
+
+        // 4. Send confirmation email
+        const emailHtml = `<h2>Password Reset Successful</h2><p>Your password has been changed. If you did not perform this action, please contact support immediately.</p>`;
+        await sendEmail({
+            email: user.email,
+            subject: "Your TapToInvite password was reset",
+            message: emailHtml
+        });
+
+        res.status(200).json({
+            success: true,
+            message: "Password reset successful! You can now log in with your new password."
+        });
+    } catch (error) {
+        console.error("Reset Password Error:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
 // 2. SETUP PASSWORD (Verify Link)
 exports.setupPassword = async (req, res) => {
     try {

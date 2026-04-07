@@ -7,7 +7,7 @@ const path = require('path');
 // Import Routes
 const publicRoutes = require('./src/routes/public.routes');
 const userRoutes = require('./src/routes/user.routes');
-// const adminRoutes = require('./src/routes/admin.routes'); // We will create this next
+const adminRoutes = require('./src/routes/admin.routes');
 
 const app = express();
 
@@ -30,8 +30,8 @@ app.use('/api/public', publicRoutes);
 // 2. User Routes: Profile, My Orders, Subscriptions (Protected by verifyToken inside the file)
 app.use('/api/user', userRoutes);
 
-// 3. Admin Routes: (We will mount this once we create admin logic)
-// app.use('/api/admin', adminRoutes);
+// 3. Admin Routes: Content Management, Configuration, etc. (Protected by verifyToken + authorizeRole)
+app.use('/api/admin', adminRoutes);
 
 // --- BASE ROUTE ---
 app.get('/', (req, res) => {
@@ -48,7 +48,7 @@ app.use((err, req, res, next) => {
 });
 
 // --- SERVER START ---
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Server is running on http://localhost:${PORT}`);
     console.log(`🌐 Accepting requests from http://localhost:9002`);

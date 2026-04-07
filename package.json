@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "seed:landing": "node seed-landing-content.js",
+    "seed:landing:dev": "NODE_ENV=development node seed-landing-content.js"
   },
   "repository": {
     "type": "git",
