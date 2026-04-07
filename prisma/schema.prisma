@@ -1,0 +1,253 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// --- ENUMS ---
+enum Role {
+  user
+  admin
+}
+
+enum UserStatus {
+  active
+  inactive
+  unverified
+}
+
+enum PaymentStatus {
+  Pending
+  Advance_Paid
+  Fully_Paid
+  Refunded
+}
+
+enum OrderStatus {
+  Pending
+  Team_Contacted
+  Designing
+  Printing
+  Shipped
+  Delivered
+}
+
+enum ItemType {
+  PLAN_BASE
+  NFC
+  NORMAL_CARD
+  WEBSITE_BASIC
+  WEBSITE_CUSTOM
+  QR_CODE
+  FRAME
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+// --- TABLES ---
+
+model ProductPlan {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  description         String   @db.Text
+  base_price          Decimal  @db.Decimal(10, 2)
+  is_recommended      Boolean  @default(false)
+  min_nfc_qty         Int      @default(0)
+  min_normal_qty      Int      @default(0)
+  features            Json
+  icon_url            String?
+  orders              Order[]
+}
+
+model EventCategory {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  slug                String   @unique
+  icon_url            String?
+  is_active           Boolean  @default(true)
+  nfc_templates       NfcTemplateCategory[]
+  normal_templates    NormalTemplateCategory[]
+  orders              Order[]
+}
+
+model NfcTemplate {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  description         String?  @db.Text
+  images              Json
+  price               Decimal  @db.Decimal(10, 2)
+  is_active           Boolean  @default(true)
+  categories          NfcTemplateCategory[]
+}
+
+model NfcTemplateCategory {
+  nfc_template        NfcTemplate   @relation(fields: [nfc_template_id], references: [id])
+  nfc_template_id     Int
+  event_category      EventCategory @relation(fields: [event_category_id], references: [id])
+  event_category_id   Int
+
+  @@id([nfc_template_id, event_category_id])
+}
+
+model NormalCardTemplate {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  description         String?  @db.Text
+  images              Json
+  price               Decimal  @db.Decimal(10, 2)
+  is_active           Boolean  @default(true)
+  categories          NormalTemplateCategory[]
+}
+
+model NormalTemplateCategory {
+  normal_template     NormalCardTemplate @relation(fields: [normal_template_id], references: [id])
+  normal_template_id  Int
+  event_category      EventCategory      @relation(fields: [event_category_id], references: [id])
+  event_category_id   Int
+
+  @@id([normal_template_id, event_category_id])
+}
+
+model User {
+  id                  Int               @id @default(autoincrement())
+  role                Role              @default(user)
+  name                String
+  email               String            @unique
+  country_code        String            @default("+91")
+  phone               String            @unique
+  password_hash       String?
+  status              UserStatus        @default(unverified)
+  refresh_token       String?           @db.VarChar(500)
+  verification_token  String?
+  reset_token         String?           // Added for your 12h reset link
+  reset_token_expiry  DateTime?
+  created_at          DateTime          @default(now())
+  
+  details             UserDetails?
+  orders              Order[]
+  subscriptions       UserSubscription[]
+  otps                Otp[]
+}
+
+model UserDetails {
+  id                  Int      @id @default(autoincrement())
+  user                User     @relation(fields: [user_id], references: [id])
+  user_id             Int      @unique
+  alt_phone           String?
+  address_line_1      String
+  address_line_2      String?
+  city                String
+  state               String
+  pincode             String
+  country             String   @default("India")
+}
+
+model Order {
+  id                  Int           @id @default(autoincrement())
+  order_number        String        @unique
+  user                User          @relation(fields: [user_id], references: [id])
+  user_id             Int
+  plan                ProductPlan   @relation(fields: [plan_id], references: [id])
+  plan_id             Int
+  category            EventCategory @relation(fields: [event_category_id], references: [id])
+  event_category_id   Int
+  event_title         String
+  event_date          DateTime
+  digital_notes       String?       @db.Text
+  total_amount        Decimal       @db.Decimal(10, 2)
+  advance_paid        Decimal       @db.Decimal(10, 2)
+  balance_amount      Decimal       @db.Decimal(10, 2)
+  advance_payment_method String?
+  balance_payment_method String?
+  transaction_id      String?
+  payment_status      PaymentStatus @default(Pending)
+  order_status        OrderStatus   @default(Pending)
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
+
+  items               OrderItem[]
+  subscriptions       UserSubscription[]
+}
+
+model OrderItem {
+  id                  Int      @id @default(autoincrement())
+  order               Order    @relation(fields: [order_id], references: [id])
+  order_id            Int
+  item_type           ItemType
+  reference_id        Int?     // ID of the template/plan
+  item_name           String
+  quantity            Int
+  unit_price          Decimal  @db.Decimal(10, 2)
+  total_price         Decimal  @db.Decimal(10, 2)
+}
+
+model SubscriptionPlan {
+  id                      Int      @id @default(autoincrement())
+  name                    String
+  description             String   @db.Text
+  price                   Decimal  @db.Decimal(10, 2)
+  duration_days           Int
+  default_reminder_config Json
+  is_active               Boolean  @default(true)
+  user_subscriptions      UserSubscription[]
+}
+
+model UserSubscription {
+  id                  Int                @id @default(autoincrement())
+  user                User               @relation(fields: [user_id], references: [id])
+  user_id             Int
+  plan                SubscriptionPlan   @relation(fields: [subscription_plan_id], references: [id])
+  subscription_plan_id Int
+  order               Order              @relation(fields: [order_id], references: [id])
+  order_id            Int
+  start_date          DateTime
+  expiry_date         DateTime
+  status              SubscriptionStatus @default(ACTIVE)
+  reminder_config     Json
+  anniversary_date    DateTime?
+}
+
+model PostPurchaseProduct {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  description         String   @db.Text
+  images              Json
+  price               Decimal  @db.Decimal(10, 2)
+  is_active           Boolean  @default(true)
+  stock_quantity      Int?
+}
+
+model SiteContent {
+  id                  Int      @id @default(autoincrement())
+  page_slug           String
+  content_key         String
+  title               String
+  content             String   @db.LongText
+  last_updated_by     Int
+  updated_at          DateTime @updatedAt
+}
+
+model SiteConfiguration {
+  id                  Int      @id @default(autoincrement())
+  config_group        String
+  config_key          String   @unique
+  config_value        String   @db.Text
+  description         String?
+}
+
+model Otp {
+  id                  Int      @id @default(autoincrement())
+  user                User     @relation(fields: [user_id], references: [id])
+  user_id             Int
+  purpose             String
+  valid_till          DateTime
+  status              Boolean  @default(false) // 0 unused, 1 used
+  code                String   // The actual 6 digit code
+}
