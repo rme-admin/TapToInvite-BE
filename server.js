@@ -22,6 +22,9 @@ app.use(cors({
     credentials: true
 }));
 
+// Serve static files from public/uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
 // --- ROUTE MOUNTING ---
 
 // 1. Public Routes: Registration, Login, Plans, Templates

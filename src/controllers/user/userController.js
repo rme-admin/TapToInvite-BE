@@ -81,12 +81,46 @@ exports.getMyOrders = async (req, res) => {
             where: { user_id: userId },
             include: {
                 items: true,
-                plan: { select: { name: true } }
+                plan: { select: { name: true } },
+                category: { select: { name: true } },
+                nfc_issuances: {
+                    orderBy: { created_at: 'desc' }
+                },
+                tracking_notes: {
+                    orderBy: { created_at: 'desc' }
+                }
             },
             orderBy: { created_at: 'desc' }
         });
 
-        res.status(200).json({ success: true, data: orders });
+        const normalizedOrders = orders.map(order => ({
+            id: order.id,
+            order_number: order.order_number,
+            event_title: order.event_title,
+            event_date: order.event_date,
+            order_status: order.order_status,
+            total_amount: order.total_amount,
+            plan: order.plan,
+            category: order.category,
+            items: order.items,
+            issued_nfc_links: order.nfc_issuances.map(issuance => ({
+                id: issuance.id,
+                label: issuance.nfc_card_number,
+                href: issuance.generated_url,
+                method: issuance.method,
+                status: issuance.status,
+            })),
+            tracking_notes: order.tracking_notes.map(note => ({
+                id: note.id,
+                heading: note.heading,
+                description: note.description,
+                note_date: note.note_date,
+                note_time: note.note_time,
+                visible_to_user: note.visible_to_user,
+            })),
+        }));
+
+        res.status(200).json({ success: true, data: normalizedOrders });
     } catch (error) {
         console.error("Get Orders Error:", error);
         res.status(500).json({ success: false, message: "Internal Server Error" });

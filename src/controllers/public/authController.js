@@ -5,6 +5,16 @@ const jwt = require('jsonwebtoken');
 const sendEmail = require('../../utils/sendEmail');
 const { getConfig } = require('../../utils/configHelper');
 
+const trySendEmail = async (payload) => {
+    try {
+        await sendEmail(payload);
+        return { sent: true };
+    } catch (error) {
+        console.error('Email delivery failed:', error.message);
+        return { sent: false, error };
+    }
+};
+
 // 1. REGISTER
 exports.register = async (req, res) => {
     try {
@@ -56,13 +66,19 @@ exports.register = async (req, res) => {
 
         const emailHtml = `<h1>Welcome, ${name}!</h1><p>Please <a href="${setupPasswordLink}">click here</a> to set your password and verify your account.</p>`;
 
-        await sendEmail({
+        const emailResult = await trySendEmail({
             email: newUser.email,
             subject: "Verify your TapToInvite Account",
             message: emailHtml
         });
 
-        res.status(201).json({ success: true, message: "Registration successful! Verification email sent." });
+        res.status(201).json({
+            success: true,
+            message: emailResult.sent
+                ? "Registration successful! Verification email sent."
+                : "Registration successful, but verification email could not be sent. Please contact support or configure SMTP.",
+            email_sent: emailResult.sent
+        });
 
     } catch (error) {
         console.error("Registration Error:", error);
@@ -109,7 +125,7 @@ exports.forgotPassword = async (req, res) => {
         const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
         const emailHtml = `<h2>Password Reset Request</h2><p>Click <a href="${resetLink}">here</a> to reset your password. This link is valid for 12 hours.</p>`;
 
-        await sendEmail({
+        const emailResult = await trySendEmail({
             email: user.email,
             subject: "Reset your TapToInvite password",
             message: emailHtml
@@ -117,7 +133,10 @@ exports.forgotPassword = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: "A password reset link has been sent to your email. It is valid for 12 hours."
+            message: emailResult.sent
+                ? "A password reset link has been sent to your email. It is valid for 12 hours."
+                : "Password reset link was created, but email delivery failed. Please configure SMTP.",
+            email_sent: emailResult.sent
         });
     } catch (error) {
         console.error("Forgot Password Error:", error);
@@ -164,7 +183,7 @@ exports.resetPassword = async (req, res) => {
 
         // 4. Send confirmation email
         const emailHtml = `<h2>Password Reset Successful</h2><p>Your password has been changed. If you did not perform this action, please contact support immediately.</p>`;
-        await sendEmail({
+        const emailResult = await trySendEmail({
             email: user.email,
             subject: "Your TapToInvite password was reset",
             message: emailHtml
@@ -172,7 +191,10 @@ exports.resetPassword = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: "Password reset successful! You can now log in with your new password."
+            message: emailResult.sent
+                ? "Password reset successful! You can now log in with your new password."
+                : "Password reset successful, but confirmation email could not be delivered.",
+            email_sent: emailResult.sent
         });
     } catch (error) {
         console.error("Reset Password Error:", error);
@@ -227,8 +249,80 @@ exports.login = async (req, res) => {
 
         res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', maxAge: 7*24*60*60*1000 });
 
-        res.status(200).json({ success: true, accessToken, user: { id: user.id, name: user.name, role: user.role } });
+        res.status(200).json({ 
+            success: true, 
+            accessToken, 
+            refreshToken,
+            user: { id: user.id, name: user.name, email: user.email, role: user.role } 
+        });
     } catch (error) {
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+// REFRESH TOKEN - Generate new access token if refresh token is valid
+exports.refreshToken = async (req, res) => {
+    try {
+        const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
+        if (!refreshToken) {
+            return res.status(401).json({ success: false, message: "Refresh token required" });
+        }
+
+        // Verify refresh token
+        let decoded;
+        try {
+            decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        } catch (err) {
+            return res.status(403).json({ success: false, message: "Invalid or expired refresh token" });
+        }
+
+        // Check if refresh token exists in database and matches
+        const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+
+        if (!user || user.refresh_token !== refreshToken) {
+            return res.status(403).json({ success: false, message: "Refresh token mismatch or user not found" });
+        }
+
+        // Generate new access token
+        const newAccessToken = jwt.sign(
+            { id: user.id, role: user.role },
+            process.env.JWT_ACCESS_SECRET,
+            { expiresIn: '15m' }
+        );
+
+        res.status(200).json({
+            success: true,
+            accessToken: newAccessToken,
+            user: { id: user.id, name: user.name, email: user.email, role: user.role }
+        });
+    } catch (error) {
+        console.error("Refresh Token Error:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+// LOGOUT - Clear refresh token from database
+exports.logout = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+
+        if (!userId) {
+            return res.status(400).json({ success: false, message: "User ID required for logout" });
+        }
+
+        // Clear refresh token from database
+        await prisma.user.update({
+            where: { id: userId },
+            data: { refresh_token: null }
+        });
+
+        // Clear refresh token cookie
+        res.clearCookie('refreshToken');
+
+        res.status(200).json({ success: true, message: "Logged out successfully" });
+    } catch (error) {
+        console.error("Logout Error:", error);
         res.status(500).json({ success: false, message: "Internal Server Error" });
     }
 };
