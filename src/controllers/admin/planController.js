@@ -73,10 +73,16 @@ exports.getActivePlans = async (req, res) => {
             }
         });
 
+        const normalizedPlans = plans.map((plan) => ({
+            ...plan,
+            price: parseFloat(plan.base_price),
+            popular: plan.is_recommended,
+        }));
+
         res.status(200).json({
             success: true,
             message: 'Active plans fetched successfully',
-            data: plans
+            data: normalizedPlans
         });
     } catch (error) {
         console.error('Error fetching active plans:', error);
@@ -180,10 +186,16 @@ exports.getPublicPlanById = async (req, res) => {
             });
         }
 
+        const normalizedPlan = {
+            ...plan,
+            price: parseFloat(plan.base_price),
+            popular: plan.is_recommended,
+        };
+
         res.status(200).json({
             success: true,
             message: 'Plan fetched successfully',
-            data: plan
+            data: normalizedPlan
         });
     } catch (error) {
         console.error('Error fetching public plan:', error);
@@ -501,7 +513,9 @@ exports.getPlanWithPricing = async (req, res) => {
                 name: plan.name,
                 description: plan.description,
                 base_price: parseFloat(plan.base_price),
+                price: parseFloat(plan.base_price),
                 is_recommended: plan.is_recommended,
+                popular: plan.is_recommended,
                 features: plan.features,
                 icon_url: plan.icon_url,
                 min_nfc_qty: plan.min_nfc_qty,

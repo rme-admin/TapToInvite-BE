@@ -196,3 +196,53 @@ exports.getEventCategoryById = async (req, res) => {
         });
     }
 };
+
+// --- GET ALL ACTIVE POST-PURCHASE PRODUCTS ---
+exports.getActivePostPurchaseProducts = async (req, res) => {
+    try {
+        const products = await prisma.postPurchaseProduct.findMany({
+            where: { is_active: true },
+            orderBy: { created_at: 'desc' }
+        });
+
+        res.status(200).json({
+            success: true,
+            data: products
+        });
+    } catch (error) {
+        console.error("Get Post-Purchase Products Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch post-purchase products"
+        });
+    }
+};
+
+// --- GET POST-PURCHASE PRODUCT BY ID ---
+exports.getPostPurchaseProductById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const product = await prisma.postPurchaseProduct.findUnique({
+            where: { id: parseInt(id) }
+        });
+
+        if (!product) {
+            return res.status(404).json({
+                success: false,
+                message: "Post-purchase product not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: product
+        });
+    } catch (error) {
+        console.error("Get Post-Purchase Product Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch post-purchase product"
+        });
+    }
+};

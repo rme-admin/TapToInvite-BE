@@ -16,6 +16,8 @@ router.get('/my-orders', userController.getMyOrders);
 
 // Order routes
 router.post('/orders', orderController.placeOrder);
+router.post('/payments/razorpay/order', orderController.createRazorpayPaymentOrder);
+router.post('/payments/razorpay/confirm', orderController.confirmPaidOrder);
 router.get('/orders/:orderId', orderController.getOrderDetails);
 
 // Catalog routes (for customizer UI)

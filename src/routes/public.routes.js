@@ -5,6 +5,7 @@ const contentController = require('../controllers/public/contentController');
 const planController = require('../controllers/admin/planController');
 const templatesController = require('../controllers/public/templatesController');
 const inviteController = require('../controllers/public/inviteController');
+const orderController = require('../controllers/user/orderController');
 const { verifyToken } = require('../middlewares/auth.middleware');
 
 // Registration routes
@@ -15,6 +16,14 @@ router.post('/refresh-token', authController.refreshToken);
 router.post('/logout', verifyToken, authController.logout);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
+
+// Guest checkout route
+router.post('/orders', orderController.placeGuestOrder);
+router.post('/payments/razorpay/order', orderController.createRazorpayPaymentOrder);
+router.post('/payments/razorpay/confirm', orderController.confirmPaidOrder);
+
+// Razorpay webhook for payment notifications
+router.post('/webhook/razorpay', orderController.razorpayWebhook);
 
 // Public content routes (No authentication required)
 router.get('/content/:pageSlug', contentController.getPageContent);
@@ -49,6 +58,10 @@ router.get('/normal-templates/:id', templatesController.getNormalTemplateById);
 // --- Event Categories
 router.get('/event-categories', templatesController.getActiveEventCategories);
 router.get('/event-categories/:id', templatesController.getEventCategoryById);
+
+// --- Post-Purchase Products (for guest experience)
+router.get('/post-purchase-products', templatesController.getActivePostPurchaseProducts);
+router.get('/post-purchase-products/:id', templatesController.getPostPurchaseProductById);
 
 // --- Public invitation page by generated key
 router.get('/invite/:key', inviteController.getPublicInviteByKey);

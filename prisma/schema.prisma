@@ -145,6 +145,8 @@ model User {
   verification_token  String?
   reset_token         String?           // Added for your 12h reset link
   reset_token_expiry  DateTime?
+  reset_otp           String?           // 6-digit OTP for password reset
+  reset_otp_expiry    DateTime?         // OTP expiry (15 minutes)
   created_at          DateTime          @default(now())
   
   details             UserDetails?

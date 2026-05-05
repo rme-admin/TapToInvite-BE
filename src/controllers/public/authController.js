@@ -88,10 +88,17 @@ exports.register = async (req, res) => {
 
 // 4. FORGOT PASSWORD (Placeholder)
 
-// 4. FORGOT PASSWORD
+// 4. FORGOT PASSWORD - Generate and send reset token link
 exports.forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required."
+            });
+        }
 
         // 1. Check if user exists
         const user = await prisma.user.findUnique({ where: { email } });
@@ -100,43 +107,57 @@ exports.forgotPassword = async (req, res) => {
         if (!user) {
             return res.status(200).json({
                 success: true,
-                message: "A password reset link has been sent to your email. It is valid for 12 hours."
+                message: "If this email exists in our system, you will receive a password reset link shortly.",
+                email_found: false
             });
         }
 
-        // 2. Generate a secure reset token
+        // 2. Generate a reset token (32 bytes)
         const resetToken = crypto.randomBytes(32).toString('hex');
 
-        // 3. Set expiry for 12 hours from now
+        // 3. Set expiry for 24 hours from now
         const expiry = new Date();
-        expiry.setHours(expiry.getHours() + 12);
+        expiry.setHours(expiry.getHours() + 24);
 
-        // 4. Save to Database
+        // 4. Save reset token to Database (clear old OTP fields)
         await prisma.user.update({
             where: { id: user.id },
             data: {
                 reset_token: resetToken,
-                reset_token_expiry: expiry
+                reset_token_expiry: expiry,
+                reset_otp: null,
+                reset_otp_expiry: null
             }
         });
 
-        // 5. Send Email Logic
+        // 5. Send Email with reset link
         const frontendUrl = await getConfig('frontend_url') || 'http://localhost:9002';
         const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
-        const emailHtml = `<h2>Password Reset Request</h2><p>Click <a href="${resetLink}">here</a> to reset your password. This link is valid for 12 hours.</p>`;
+
+        const emailHtml = `
+            <h2>Password Reset Request</h2>
+            <p>Click the link below to reset your password:</p>
+            <a href="${resetLink}" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0;">
+                Reset Password
+            </a>
+            <p>Or copy this link: <a href="${resetLink}">${resetLink}</a></p>
+            <p>This link is valid for 24 hours. Do not share this with anyone.</p>
+            <p>If you did not request this, please ignore this email.</p>
+        `;
 
         const emailResult = await trySendEmail({
             email: user.email,
-            subject: "Reset your TapToInvite password",
+            subject: "Your TapToInvite Password Reset Link",
             message: emailHtml
         });
 
         res.status(200).json({
             success: true,
             message: emailResult.sent
-                ? "A password reset link has been sent to your email. It is valid for 12 hours."
-                : "Password reset link was created, but email delivery failed. Please configure SMTP.",
-            email_sent: emailResult.sent
+                ? "Password reset link has been sent to your email. It is valid for 24 hours."
+                : "Reset link was generated, but email delivery failed. Please configure SMTP.",
+            email_sent: emailResult.sent,
+            email_found: true
         });
     } catch (error) {
         console.error("Forgot Password Error:", error);
@@ -144,14 +165,27 @@ exports.forgotPassword = async (req, res) => {
     }
 };
 
-// 5. RESET PASSWORD (Placeholder)
-
-// 5. RESET PASSWORD
+// 5. RESET PASSWORD - Validate token and update password
 exports.resetPassword = async (req, res) => {
     try {
         const { token, newPassword } = req.body;
 
-        // 1. Find user with this token and check if it has NOT expired
+        if (!token || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Reset token and new password are required."
+            });
+        }
+
+        // Password validation
+        if (newPassword.length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 8 characters long."
+            });
+        }
+
+        // 1. Find user with valid reset token that hasn't expired
         const user = await prisma.user.findFirst({
             where: {
                 reset_token: token,
@@ -164,14 +198,14 @@ exports.resetPassword = async (req, res) => {
         if (!user) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid or expired reset link. Please request a new one."
+                message: "Invalid or expired reset link. Please request a new password reset."
             });
         }
 
         // 2. Hash the new password
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        // 3. Update password and clear the reset fields
+        // 3. Update password and clear the reset token fields
         await prisma.user.update({
             where: { id: user.id },
             data: {
@@ -182,10 +216,14 @@ exports.resetPassword = async (req, res) => {
         });
 
         // 4. Send confirmation email
-        const emailHtml = `<h2>Password Reset Successful</h2><p>Your password has been changed. If you did not perform this action, please contact support immediately.</p>`;
+        const emailHtml = `
+            <h2>Password Reset Successful</h2>
+            <p>Your password has been changed successfully.</p>
+            <p>If you did not perform this action, please contact support immediately.</p>
+        `;
         const emailResult = await trySendEmail({
             email: user.email,
-            subject: "Your TapToInvite password was reset",
+            subject: "Your TapToInvite Password Was Reset",
             message: emailHtml
         });
 
