@@ -485,18 +485,17 @@ exports.createRazorpayPaymentOrder = async (req, res) => {
     }
 };
 
-// --- CONFIRM PAID ORDER ---
+// --- CONFIRM PAID ORDER (UPDATED FLOW) ---
 exports.confirmPaidOrder = async (req, res) => {
     try {
         const payload = req.body;
-        const userId = req.user?.id || null;
         const orderData = payload.orderData || payload;
         const payment = payload.payment || {};
 
-        if (!orderData.planId || !orderData.eventCategoryId || !orderData.eventTitle || !orderData.clientInfo) {
+        if (!orderData.orderId) {
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields'
+                message: 'Missing order ID'
             });
         }
 
@@ -520,133 +519,61 @@ exports.confirmPaidOrder = async (req, res) => {
             });
         }
 
-        let createdUser = null;
-        let verificationToken = null;
-
-        if (!userId) {
-            const { name, email, phone } = orderData.clientInfo;
-
-            if (!name || !email || !phone) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Guest checkout requires name, email, and phone number.'
-                });
-            }
-
-            const existingUser = await prisma.user.findUnique({
-                where: { email }
-            });
-
-            if (existingUser) {
-                return res.status(400).json({
-                    success: false,
-                    code: 'ACCOUNT_EXISTS',
-                    accountExists: true,
-                    email,
-                    message: 'An account already exists with this email. Please log in to continue with your purchase.'
-                });
-            }
-
-            verificationToken = crypto.randomBytes(32).toString('hex');
-        }
-
-        const result = await prisma.$transaction(async (tx) => {
-            if (!userId) {
-                const { name, email, phone } = orderData.clientInfo;
-
-                createdUser = await tx.user.create({
-                    data: {
-                        name,
-                        email,
-                        country_code: orderData.clientInfo.countryCode || '+91',
-                        phone,
-                        status: 'unverified',
-                        verification_token: verificationToken,
-                        role: 'user'
-                    }
-                });
-
-                await tx.userDetails.create({
-                    data: {
-                        user_id: createdUser.id,
-                        alt_phone: orderData.clientInfo.altPhone || null,
-                        address_line_1: orderData.clientInfo.address1,
-                        address_line_2: orderData.clientInfo.address2 || null,
-                        city: orderData.clientInfo.city,
-                        state: orderData.clientInfo.state,
-                        pincode: orderData.clientInfo.pincode,
-                        country: orderData.clientInfo.country || 'India'
-                    }
-                });
-            }
-
-            const effectiveUserId = userId || createdUser.id;
-            return createPaidOrderInTransaction(tx, effectiveUserId, orderData, payment);
+        // Find the existing order
+        const existingOrder = await prisma.order.findUnique({
+            where: { id: orderData.orderId },
+            include: { user: true, plan: true, items: true }
         });
 
-        if (!result.order || !result.plan || !result.pricing) {
+        if (!existingOrder) {
             return res.status(404).json({
                 success: false,
-                message: 'Plan not found'
+                message: 'Order not found'
             });
         }
 
-        const completeOrder = await prisma.order.findUnique({
-            where: { id: result.order.id },
-            include: {
-                items: true,
-                plan: { select: { name: true } }
-            }
-        });
-
-        if (createdUser && verificationToken) {
-            const emailResult = await sendGuestSetupEmail({
-                name: createdUser.name,
-                email: createdUser.email,
-                verificationToken,
-                orderNumber: completeOrder.order_number,
-            });
-
-            return res.status(201).json({
-                success: true,
-                message: emailResult.sent
-                    ? 'Payment successful. Order created and account setup email sent.'
-                    : 'Payment successful. Order created, but the account setup email could not be sent.',
-                email_sent: emailResult.sent,
-                data: {
-                    orderId: completeOrder.id,
-                    orderNumber: completeOrder.order_number,
-                    totalAmount: completeOrder.total_amount,
-                    advanceAmount: completeOrder.advance_paid,
-                    balanceAmount: completeOrder.balance_amount,
-                    items: completeOrder.items,
-                    eventTitle: completeOrder.event_title,
-                    accountCreated: true,
-                    passwordSetupRequired: true,
-                }
-            });
-        }
-
-        return res.status(201).json({
-            success: true,
-            message: 'Payment successful. Order created successfully.',
+        // Update the order to Advance_Paid
+        const updatedOrder = await prisma.order.update({
+            where: { id: orderData.orderId },
             data: {
-                orderId: completeOrder.id,
-                orderNumber: completeOrder.order_number,
-                totalAmount: completeOrder.total_amount,
-                advanceAmount: completeOrder.advance_paid,
-                balanceAmount: completeOrder.balance_amount,
-                items: completeOrder.items,
-                eventTitle: completeOrder.event_title,
-                accountCreated: !!userId,
-                passwordSetupRequired: false,
+                payment_status: 'Advance_Paid',
+                advance_payment_method: 'razorpay',
+                transaction_id: payment.razorpay_payment_id
             }
         });
+
+        // Send confirmation email with order details
+        const emailHtml = `
+            <h1>Payment Successful!</h1>
+            <p>Dear ${existingOrder.user.name},</p>
+            <p>We have successfully received your advance payment for Order <strong>${existingOrder.order_number}</strong>.</p>
+            <p>Event: ${existingOrder.event_title}</p>
+            <p>Amount Paid: INR ${existingOrder.advance_paid}</p>
+            <p>Balance Amount: INR ${existingOrder.balance_amount}</p>
+            <p>We will start processing your order shortly.</p>
+        `;
+
+        await trySendEmail({
+            email: existingOrder.user.email,
+            subject: `Payment Confirmation - Order ${existingOrder.order_number}`,
+            message: emailHtml
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Payment verified and order updated successfully.',
+            data: {
+                orderId: updatedOrder.id,
+                orderNumber: updatedOrder.order_number,
+                paymentStatus: updatedOrder.payment_status
+            }
+        });
+
     } catch (error) {
         console.error('❌ Confirm Paid Order Error:', error.message);
         res.status(500).json({
             success: false,
-            message: 'Failed to confirm paid order',
+            message: 'Failed to verify payment',
             error: error.message
         });
     }
@@ -1056,23 +983,28 @@ exports.getPlans = async (req, res) => {
     }
 };
 
-// --- GET NFC TEMPLATES ---
 exports.getNFCTemplates = async (req, res) => {
     try {
         const templates = await prisma.nfcTemplate.findMany({
-            where: { is_active: true }
+            where: { status: 'active' },
+            include: {
+                categories: {
+                    include: { event_category: { select: { id: true, name: true, slug: true } } }
+                }
+            },
+            orderBy: [{ is_recommended: 'desc' }, { created_at: 'desc' }]
         });
 
-        res.status(200).json({
-            success: true,
-            data: templates
-        });
+        const normalized = templates.map(t => ({
+            ...t,
+            dimensions: t.width_mm && t.height_mm ? `${t.width_mm} x ${t.height_mm}mm` : '85 x 54mm',
+            categories: t.categories.map(c => c.event_category)
+        }));
+
+        res.status(200).json({ success: true, data: normalized });
     } catch (error) {
-        console.error("Get NFC Templates Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch NFC templates"
-        });
+        console.error('Get NFC Templates Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch NFC templates' });
     }
 };
 

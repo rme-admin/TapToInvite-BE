@@ -26,6 +26,18 @@ enum PaymentStatus {
   Refunded
 }
 
+enum NfcTemplateStatus {
+  active
+  inactive
+  archived
+}
+
+enum CardTemplateStatus {
+  active
+  inactive
+  archived
+}
+
 enum OrderStatus {
   Pending
   Team_Contacted
@@ -93,13 +105,17 @@ model EventCategory {
 }
 
 model NfcTemplate {
-  id                  Int      @id @default(autoincrement())
+  id                  Int                   @id @default(autoincrement())
   name                String
-  description         String?  @db.Text
-  dimensions          String?  @default("85 x 54mm")
+  description         String?               @db.Text
+  width_mm            Decimal?              @db.Decimal(8, 2)
+  height_mm           Decimal?              @db.Decimal(8, 2)
   images              Json
-  price               Decimal  @db.Decimal(10, 2)
-  is_active           Boolean  @default(true)
+  price               Decimal               @db.Decimal(10, 2)
+  status              NfcTemplateStatus     @default(active)
+  is_recommended      Boolean               @default(false)
+  created_at          DateTime              @default(now())
+  updated_at          DateTime              @updatedAt
   categories          NfcTemplateCategory[]
 }
 
@@ -113,13 +129,17 @@ model NfcTemplateCategory {
 }
 
 model NormalCardTemplate {
-  id                  Int      @id @default(autoincrement())
+  id                  Int                   @id @default(autoincrement())
   name                String
-  description         String?  @db.Text
-  dimensions          String?  @default("A4 (210 x 297mm)")
+  description         String?               @db.Text
+  width_mm            Decimal?              @db.Decimal(8, 2)
+  height_mm           Decimal?              @db.Decimal(8, 2)
   images              Json
-  price               Decimal  @db.Decimal(10, 2)
-  is_active           Boolean  @default(true)
+  price               Decimal               @db.Decimal(10, 2)
+  status              CardTemplateStatus    @default(active)
+  is_recommended      Boolean               @default(false)
+  created_at          DateTime              @default(now())
+  updated_at          DateTime              @updatedAt
   categories          NormalTemplateCategory[]
 }
 
@@ -153,6 +173,7 @@ model User {
   orders              Order[]
   subscriptions       UserSubscription[]
   otps                Otp[]
+  config_updates      SiteConfiguration[]
 }
 
 model UserDetails {
@@ -256,11 +277,14 @@ model SiteContent {
 }
 
 model SiteConfiguration {
-  id                  Int      @id @default(autoincrement())
+  id                  Int       @id @default(autoincrement())
   config_group        String
-  config_key          String   @unique
-  config_value        String   @db.Text
+  config_key          String    @unique
+  config_value        String    @db.Text
   description         String?
+  updated_by_id       Int?
+  updated_by          User?     @relation(fields: [updated_by_id], references: [id], onDelete: SetNull)
+  updated_at          DateTime? @updatedAt
 }
 
 model NFCCardIssuance {

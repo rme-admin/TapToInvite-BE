@@ -4,44 +4,35 @@ const prisma = require('../../config/db');
 exports.getActiveNFCTemplates = async (req, res) => {
     try {
         const { categoryId } = req.query;
-        
-        let templates;
-        
-        if (categoryId) {
-            // Fetch NFC templates for a specific category
-            templates = await prisma.nfcTemplate.findMany({
-                where: { 
-                    is_active: true,
-                    categories: {
-                        some: {
-                            event_category_id: parseInt(categoryId)
-                        }
-                    }
-                },
-                include: {
-                    categories: true
-                }
-            });
-        } else {
-            // Fetch all active NFC templates
-            templates = await prisma.nfcTemplate.findMany({
-                where: { is_active: true },
-                include: {
-                    categories: true
-                }
-            });
-        }
 
-        res.status(200).json({
-            success: true,
-            data: templates
+        const where = {
+            status: 'active',
+            ...(categoryId ? {
+                categories: { some: { event_category_id: parseInt(categoryId) } }
+            } : {})
+        };
+
+        const templates = await prisma.nfcTemplate.findMany({
+            where,
+            include: {
+                categories: {
+                    include: { event_category: { select: { id: true, name: true, slug: true } } }
+                }
+            },
+            orderBy: [{ is_recommended: 'desc' }, { created_at: 'desc' }]
         });
+
+        const normalized = templates.map(t => ({
+            ...t,
+            // Computed dimensions string for frontend compatibility
+            dimensions: t.width_mm && t.height_mm ? `${t.width_mm} x ${t.height_mm}mm` : '85 x 54mm',
+            categories: t.categories.map(c => c.event_category)
+        }));
+
+        res.status(200).json({ success: true, data: normalized });
     } catch (error) {
-        console.error("Get NFC Templates Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch NFC templates"
-        });
+        console.error('Get NFC Templates Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch NFC templates' });
     }
 };
 
@@ -51,26 +42,29 @@ exports.getNFCTemplateById = async (req, res) => {
         const { id } = req.params;
 
         const template = await prisma.nfcTemplate.findUnique({
-            where: { id: parseInt(id) }
+            where: { id: parseInt(id) },
+            include: {
+                categories: {
+                    include: { event_category: { select: { id: true, name: true, slug: true } } }
+                }
+            }
         });
 
-        if (!template) {
-            return res.status(404).json({
-                success: false,
-                message: "NFC Template not found"
-            });
+        if (!template || template.status === 'archived') {
+            return res.status(404).json({ success: false, message: 'NFC Template not found' });
         }
 
         res.status(200).json({
             success: true,
-            data: template
+            data: {
+                ...template,
+                dimensions: template.width_mm && template.height_mm ? `${template.width_mm} x ${template.height_mm}mm` : '85 x 54mm',
+                categories: template.categories.map(c => c.event_category)
+            }
         });
     } catch (error) {
-        console.error("Get NFC Template Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch NFC template"
-        });
+        console.error('Get NFC Template Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch NFC template' });
     }
 };
 

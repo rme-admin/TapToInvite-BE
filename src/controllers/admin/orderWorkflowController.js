@@ -160,3 +160,35 @@ exports.getOrderTrackingNotes = async (req, res) => {
         res.status(500).json({ success: false, message: 'Failed to fetch tracking notes', error: error.message });
     }
 };
+
+exports.getAllOrders = async (req, res) => {
+    try {
+        const orders = await prisma.order.findMany({
+            include: {
+                user: { select: { name: true, email: true } },
+                plan: { select: { name: true } },
+                category: { select: { name: true } },
+                tracking_notes: { orderBy: { created_at: 'desc' }, take: 1 }
+            },
+            orderBy: { created_at: 'desc' }
+        });
+        res.status(200).json({ success: true, data: orders });
+    } catch (error) {
+        console.error('Get All Orders Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch orders', error: error.message });
+    }
+};
+
+exports.getRecentTrackingNotes = async (req, res) => {
+    try {
+        const notes = await prisma.orderTrackingNote.findMany({
+            include: { order: { select: { order_number: true } } },
+            orderBy: { created_at: 'desc' },
+            take: 10
+        });
+        res.status(200).json({ success: true, data: notes });
+    } catch (error) {
+        console.error('Get Recent Tracking Notes Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch tracking notes', error: error.message });
+    }
+};

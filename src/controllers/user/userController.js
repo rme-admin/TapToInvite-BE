@@ -100,6 +100,7 @@ exports.getMyOrders = async (req, res) => {
             event_date: order.event_date,
             order_status: order.order_status,
             total_amount: order.total_amount,
+            created_at: order.created_at,
             plan: order.plan,
             category: order.category,
             items: order.items,

@@ -5,6 +5,85 @@ const { uploadImage, setUploadFolder } = require('../middlewares/upload.middlewa
 const contentController = require('../controllers/admin/contentController');
 const planController = require('../controllers/admin/planController');
 const orderWorkflowController = require('../controllers/admin/orderWorkflowController');
+const adminUserController = require('../controllers/admin/adminUserController');
+const configController = require('../controllers/admin/configController');
+const nfcTemplateController = require('../controllers/admin/nfcTemplateController');
+
+/**
+ * NFC TEMPLATE ROUTES
+ */
+
+router.get('/nfc-templates',
+    verifyToken,
+    authorizeRole('admin'),
+    nfcTemplateController.getAllNfcTemplates
+);
+
+router.get('/nfc-templates/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    nfcTemplateController.getNfcTemplateById
+);
+
+router.post('/nfc-templates',
+    verifyToken,
+    authorizeRole('admin'),
+    setUploadFolder('nfc_templates'),
+    uploadImage.array('images', 10),
+    nfcTemplateController.createNfcTemplate
+);
+
+router.put('/nfc-templates/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    setUploadFolder('nfc_templates'),
+    uploadImage.array('images', 10),
+    nfcTemplateController.updateNfcTemplate
+);
+
+router.delete('/nfc-templates/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    nfcTemplateController.deleteNfcTemplate
+);
+
+router.patch('/nfc-templates/:id/status',
+    verifyToken,
+    authorizeRole('admin'),
+    nfcTemplateController.updateNfcTemplateStatus
+);
+
+router.patch('/nfc-templates/:id/recommendation',
+    verifyToken,
+    authorizeRole('admin'),
+    nfcTemplateController.updateNfcTemplateRecommendation
+);
+
+/**
+ * CONFIGURATION MANAGEMENT ROUTES
+ */
+
+router.get('/config',
+    verifyToken,
+    authorizeRole('admin'),
+    configController.getAllConfigs
+);
+
+router.put('/config',
+    verifyToken,
+    authorizeRole('admin'),
+    configController.updateConfigs
+);
+
+/**
+ * USER MANAGEMENT ROUTES
+ */
+
+router.get('/users',
+    verifyToken,
+    authorizeRole('admin'),
+    adminUserController.getAllUsers
+);
 
 /**
  * CONTENT MANAGEMENT ROUTES
@@ -84,8 +163,20 @@ router.delete('/plans/:id',
 );
 
 /**
- * NFC ISSUANCE & ORDER TRACKING ROUTES
+ * ORDER MANAGEMENT & TRACKING ROUTES
  */
+
+router.get('/orders',
+    verifyToken,
+    authorizeRole('admin'),
+    orderWorkflowController.getAllOrders
+);
+
+router.get('/tracking-notes',
+    verifyToken,
+    authorizeRole('admin'),
+    orderWorkflowController.getRecentTrackingNotes
+);
 
 router.post('/orders/:orderId/nfc-issuances',
     verifyToken,
