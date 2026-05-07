@@ -488,14 +488,14 @@ exports.getPlanWithPricing = async (req, res) => {
 
         // Fetch cheapest active NFC template
         const cheapestNFC = await prisma.nfcTemplate.findFirst({
-            where: { is_active: true },
+            where: { status: 'active' },
             orderBy: { price: 'asc' },
             select: { id: true, name: true, price: true }
         });
 
         // Fetch cheapest active normal template
         const cheapestNormal = await prisma.normalCardTemplate.findFirst({
-            where: { is_active: true },
+            where: { status: 'active' },
             orderBy: { price: 'asc' },
             select: { id: true, name: true, price: true }
         });

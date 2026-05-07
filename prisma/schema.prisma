@@ -15,8 +15,16 @@ enum Role {
 
 enum UserStatus {
   active
-  inactive
   unverified
+  disabled
+  archived
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+  closed
 }
 
 enum PaymentStatus {
@@ -33,6 +41,12 @@ enum NfcTemplateStatus {
 }
 
 enum CardTemplateStatus {
+  active
+  inactive
+  archived
+}
+
+enum CategoryStatus {
   active
   inactive
   archived
@@ -94,11 +108,13 @@ model ProductPlan {
 }
 
 model EventCategory {
-  id                  Int      @id @default(autoincrement())
+  id                  Int                     @id @default(autoincrement())
   name                String
-  slug                String   @unique
+  slug                String                  @unique
   icon_url            String?
-  is_active           Boolean  @default(true)
+  status              CategoryStatus          @default(active)
+  created_at          DateTime                @default(now())
+  updated_at          DateTime                @updatedAt
   nfc_templates       NfcTemplateCategory[]
   normal_templates    NormalTemplateCategory[]
   orders              Order[]
@@ -174,6 +190,24 @@ model User {
   subscriptions       UserSubscription[]
   otps                Otp[]
   config_updates      SiteConfiguration[]
+  tickets             Ticket[]           @relation("TicketUser")
+  tickets_created     Ticket[]           @relation("TicketCreator")
+  payments_marked     Payment[]          @relation("PaymentMarkedBy")
+}
+
+model Ticket {
+  id                  Int           @id @default(autoincrement())
+  ticket_number       String        @unique
+  heading             String
+  description         String?       @db.Text
+  status              TicketStatus  @default(open)
+  user                User          @relation("TicketUser", fields: [user_id], references: [id], onDelete: Cascade)
+  user_id             Int
+  created_by          User          @relation("TicketCreator", fields: [created_by_id], references: [id], onDelete: Cascade)
+  created_by_id       Int
+  updates             Json?         // Array of { date, heading, note, updatedBy }
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
 }
 
 model UserDetails {
@@ -216,6 +250,32 @@ model Order {
   subscriptions       UserSubscription[]
   nfc_issuances       NFCCardIssuance[]
   tracking_notes      OrderTrackingNote[]
+  payments            Payment[]
+}
+
+enum PaymentMode {
+  online
+  cash
+  neft
+  cheque
+  upi
+  other
+}
+
+model Payment {
+  id                  Int           @id @default(autoincrement())
+  order               Order         @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  order_id            Int
+  transaction_id      String?       // payment reference / transaction ID
+  amount              Decimal       @db.Decimal(10, 2)
+  payment_note        String?       @db.Text
+  status              PaymentStatus @default(Pending)
+  mode                PaymentMode   @default(online)
+  transaction_date    DateTime
+  marked_by           User          @relation("PaymentMarkedBy", fields: [marked_by_id], references: [id])
+  marked_by_id        Int
+  created_at          DateTime      @default(now())
+  updated_at          DateTime      @updatedAt
 }
 
 model OrderItem {

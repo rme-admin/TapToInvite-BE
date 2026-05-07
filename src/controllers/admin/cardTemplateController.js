@@ -1,8 +1,6 @@
 const prisma = require('../../config/db');
 
-const deriveGroup = () => 'CARD';
-
-// ─── LIST ALL TEMPLATES ───────────────────────────────────────────────────────
+// ─── LIST ALL CARD TEMPLATES ──────────────────────────────────────────────────
 exports.getAllCardTemplates = async (req, res) => {
     try {
         const templates = await prisma.normalCardTemplate.findMany({
@@ -33,11 +31,11 @@ exports.getAllCardTemplates = async (req, res) => {
         res.status(200).json({ success: true, data: normalized });
     } catch (error) {
         console.error('Get Card Templates Error:', error);
-        res.status(500).json({ success: false, message: 'Failed to fetch card templates', error: error.message });
+        res.status(500).json({ success: false, message: 'Failed to fetch templates', error: error.message });
     }
 };
 
-// ─── GET SINGLE ──────────────────────────────────────────────────────────────
+// ─── GET SINGLE TEMPLATE ─────────────────────────────────────────────────────
 exports.getCardTemplateById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -54,7 +52,10 @@ exports.getCardTemplateById = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: { ...template, categories: template.categories.map(c => c.event_category) }
+            data: {
+                ...template,
+                categories: template.categories.map(c => c.event_category)
+            }
         });
     } catch (error) {
         console.error('Get Card Template Error:', error);
@@ -62,7 +63,7 @@ exports.getCardTemplateById = async (req, res) => {
     }
 };
 
-// ─── CREATE ──────────────────────────────────────────────────────────────────
+// ─── CREATE TEMPLATE ─────────────────────────────────────────────────────────
 exports.createCardTemplate = async (req, res) => {
     try {
         const { name, description, width_mm, height_mm, price, status, is_recommended, categoryIds } = req.body;
@@ -71,7 +72,9 @@ exports.createCardTemplate = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Name and price are required.' });
         }
 
-        const images = req.files?.map(f => `/uploads/card_templates/${f.filename}`) || [];
+        const images = req.files?.map(file =>
+            `/uploads/card_templates/${file.filename}`
+        ) || [];
 
         const parsedCategoryIds = categoryIds
             ? (Array.isArray(categoryIds) ? categoryIds : JSON.parse(categoryIds)).map(Number)
@@ -83,12 +86,14 @@ exports.createCardTemplate = async (req, res) => {
                 description: description ? String(description).trim() : null,
                 width_mm: width_mm ? parseFloat(width_mm) : null,
                 height_mm: height_mm ? parseFloat(height_mm) : null,
-                images,
+                images: images,
                 price: parseFloat(price),
                 status: status || 'active',
                 is_recommended: is_recommended === 'true' || is_recommended === true,
                 categories: {
-                    create: parsedCategoryIds.map(catId => ({ event_category_id: catId }))
+                    create: parsedCategoryIds.map(catId => ({
+                        event_category_id: catId
+                    }))
                 }
             },
             include: {
@@ -100,7 +105,7 @@ exports.createCardTemplate = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: 'Card template created.',
+            message: 'Card template created successfully.',
             data: { ...template, categories: template.categories.map(c => c.event_category) }
         });
     } catch (error) {
@@ -109,7 +114,7 @@ exports.createCardTemplate = async (req, res) => {
     }
 };
 
-// ─── UPDATE ──────────────────────────────────────────────────────────────────
+// ─── UPDATE TEMPLATE ─────────────────────────────────────────────────────────
 exports.updateCardTemplate = async (req, res) => {
     try {
         const { id } = req.params;
@@ -127,16 +132,20 @@ exports.updateCardTemplate = async (req, res) => {
         if (status !== undefined) updateData.status = status;
         if (is_recommended !== undefined) updateData.is_recommended = is_recommended === 'true' || is_recommended === true;
 
+        // Handle new uploaded images — append to existing
         if (req.files?.length > 0) {
-            const newImages = req.files.map(f => `/uploads/card_templates/${f.filename}`);
+            const newImages = req.files.map(file => `/uploads/card_templates/${file.filename}`);
             const existingImages = Array.isArray(existing.images) ? existing.images : [];
             updateData.images = [...existingImages, ...newImages];
         }
 
+        // Handle category changes
         if (categoryIds !== undefined) {
             const parsedCategoryIds = (Array.isArray(categoryIds) ? categoryIds : JSON.parse(categoryIds)).map(Number);
             await prisma.normalTemplateCategory.deleteMany({ where: { normal_template_id: parseInt(id) } });
-            updateData.categories = { create: parsedCategoryIds.map(catId => ({ event_category_id: catId })) };
+            updateData.categories = {
+                create: parsedCategoryIds.map(catId => ({ event_category_id: catId }))
+            };
         }
 
         const template = await prisma.normalCardTemplate.update({
@@ -151,7 +160,7 @@ exports.updateCardTemplate = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: 'Card template updated.',
+            message: 'Card template updated successfully.',
             data: { ...template, categories: template.categories.map(c => c.event_category) }
         });
     } catch (error) {
@@ -160,41 +169,55 @@ exports.updateCardTemplate = async (req, res) => {
     }
 };
 
-// ─── SOFT DELETE ─────────────────────────────────────────────────────────────
+// ─── SOFT DELETE (archive) ───────────────────────────────────────────────────
 exports.deleteCardTemplate = async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.normalCardTemplate.update({ where: { id: parseInt(id) }, data: { status: 'archived' } });
-        res.status(200).json({ success: true, message: 'Card template archived.' });
+        await prisma.normalCardTemplate.update({
+            where: { id: parseInt(id) },
+            data: { status: 'archived' }
+        });
+        res.status(200).json({ success: true, message: 'Card template archived successfully.' });
     } catch (error) {
         console.error('Delete Card Template Error:', error);
         res.status(500).json({ success: false, message: 'Failed to archive template', error: error.message });
     }
 };
 
-// ─── STATUS ──────────────────────────────────────────────────────────────────
+// ─── CHANGE STATUS ───────────────────────────────────────────────────────────
 exports.updateCardTemplateStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
+
         if (!['active', 'inactive', 'archived'].includes(status)) {
             return res.status(400).json({ success: false, message: 'Invalid status.' });
         }
-        await prisma.normalCardTemplate.update({ where: { id: parseInt(id) }, data: { status } });
-        res.status(200).json({ success: true, message: `Status set to ${status}.` });
+
+        await prisma.normalCardTemplate.update({
+            where: { id: parseInt(id) },
+            data: { status }
+        });
+
+        res.status(200).json({ success: true, message: `Template status set to ${status}.` });
     } catch (error) {
         console.error('Update Card Status Error:', error);
         res.status(500).json({ success: false, message: 'Failed to update status', error: error.message });
     }
 };
 
-// ─── RECOMMENDATION ──────────────────────────────────────────────────────────
+// ─── TOGGLE RECOMMENDATION ───────────────────────────────────────────────────
 exports.updateCardTemplateRecommendation = async (req, res) => {
     try {
         const { id } = req.params;
         const { is_recommended } = req.body;
-        await prisma.normalCardTemplate.update({ where: { id: parseInt(id) }, data: { is_recommended: Boolean(is_recommended) } });
-        res.status(200).json({ success: true, message: 'Recommendation updated.' });
+
+        await prisma.normalCardTemplate.update({
+            where: { id: parseInt(id) },
+            data: { is_recommended: Boolean(is_recommended) }
+        });
+
+        res.status(200).json({ success: true, message: `Card template recommendation updated.` });
     } catch (error) {
         console.error('Update Card Recommendation Error:', error);
         res.status(500).json({ success: false, message: 'Failed to update recommendation', error: error.message });

@@ -10,6 +10,7 @@ const SUBDIRS = {
     site_contents: path.join(UPLOAD_DIR, 'site-contents'),
     normal_invitations: path.join(UPLOAD_DIR, 'normal_invitations'),
     nfc_templates: path.join(UPLOAD_DIR, 'nfc_templates'),
+    card_templates: path.join(UPLOAD_DIR, 'card_templates'),
     event_categories: path.join(UPLOAD_DIR, 'event_categories'),
     plan_icons: path.join(UPLOAD_DIR, 'plan_icons'),
     profile_images: path.join(UPLOAD_DIR, 'profile_images'),

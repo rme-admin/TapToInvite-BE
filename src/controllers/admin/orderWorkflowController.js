@@ -165,17 +165,169 @@ exports.getAllOrders = async (req, res) => {
     try {
         const orders = await prisma.order.findMany({
             include: {
-                user: { select: { name: true, email: true } },
-                plan: { select: { name: true } },
-                category: { select: { name: true } },
-                tracking_notes: { orderBy: { created_at: 'desc' }, take: 1 }
+                user: { select: { id: true, name: true, email: true, phone: true } },
+                plan: { select: { id: true, name: true } },
+                category: { select: { id: true, name: true } },
+                tracking_notes: { orderBy: { created_at: 'desc' }, take: 1 },
+                payments: { select: { amount: true, status: true } },
+                _count: { select: { payments: true, items: true } }
             },
             orderBy: { created_at: 'desc' }
         });
-        res.status(200).json({ success: true, data: orders });
+
+        // Add total_paid calculation
+        const normalized = orders.map(o => ({
+            ...o,
+            total_paid: o.payments
+                .filter(p => p.status !== 'Refunded')
+                .reduce((sum, p) => sum + parseFloat(p.amount), 0),
+            payments: undefined // remove raw payments array
+        }));
+
+        res.status(200).json({ success: true, data: normalized });
     } catch (error) {
         console.error('Get All Orders Error:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch orders', error: error.message });
+    }
+};
+
+// ─── GET ORDER DETAIL ────────────────────────────────────────────────────────
+exports.getOrderById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const order = await prisma.order.findUnique({
+            where: { id: parseInt(id) },
+            include: {
+                user: { select: { id: true, name: true, email: true, phone: true, country_code: true } },
+                plan: { select: { id: true, name: true, base_price: true } },
+                category: { select: { id: true, name: true } },
+                items: true,
+                tracking_notes: { orderBy: { created_at: 'desc' } },
+                nfc_issuances: { orderBy: { created_at: 'desc' } },
+                payments: {
+                    orderBy: { transaction_date: 'desc' },
+                    include: { marked_by: { select: { id: true, name: true } } }
+                }
+            }
+        });
+
+        if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
+
+        // Calculate total paid
+        const total_paid = order.payments
+            .filter(p => p.status !== 'Refunded')
+            .reduce((sum, p) => sum + parseFloat(p.amount), 0);
+
+        res.status(200).json({
+            success: true,
+            data: { ...order, total_paid }
+        });
+    } catch (error) {
+        console.error('Get Order Detail Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch order', error: error.message });
+    }
+};
+
+// ─── UPDATE ORDER STATUS ─────────────────────────────────────────────────────
+exports.updateOrderStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { order_status, payment_status } = req.body;
+
+        const updateData = {};
+        if (order_status) updateData.order_status = order_status;
+        if (payment_status) updateData.payment_status = payment_status;
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ success: false, message: 'Provide order_status or payment_status.' });
+        }
+
+        await prisma.order.update({
+            where: { id: parseInt(id) },
+            data: updateData
+        });
+
+        res.status(200).json({ success: true, message: 'Order updated successfully.' });
+    } catch (error) {
+        console.error('Update Order Status Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update order', error: error.message });
+    }
+};
+
+// ─── RECORD PAYMENT ──────────────────────────────────────────────────────────
+exports.recordPayment = async (req, res) => {
+    try {
+        const { order_id, transaction_id, amount, payment_note, status, mode, transaction_date } = req.body;
+        const markedById = req.user.id;
+
+        if (!order_id || !amount || !transaction_date) {
+            return res.status(400).json({ success: false, message: 'order_id, amount, and transaction_date are required.' });
+        }
+
+        const order = await prisma.order.findUnique({ where: { id: parseInt(order_id) } });
+        if (!order) return res.status(404).json({ success: false, message: 'Order not found.' });
+
+        const payment = await prisma.payment.create({
+            data: {
+                order_id: parseInt(order_id),
+                transaction_id: transaction_id || null,
+                amount: parseFloat(amount),
+                payment_note: payment_note || null,
+                status: status || 'Advance_Paid',
+                mode: mode || 'online',
+                transaction_date: new Date(transaction_date),
+                marked_by_id: markedById
+            },
+            include: {
+                marked_by: { select: { id: true, name: true } }
+            }
+        });
+
+        // Auto-update order payment_status based on total paid
+        const allPayments = await prisma.payment.findMany({
+            where: { order_id: parseInt(order_id), status: { not: 'Refunded' } }
+        });
+        const totalPaid = allPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+        const orderTotal = parseFloat(order.total_amount);
+
+        let newPaymentStatus = 'Pending';
+        if (totalPaid >= orderTotal) newPaymentStatus = 'Fully_Paid';
+        else if (totalPaid > 0) newPaymentStatus = 'Advance_Paid';
+
+        await prisma.order.update({
+            where: { id: parseInt(order_id) },
+            data: { payment_status: newPaymentStatus }
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Payment recorded successfully.',
+            data: { ...payment, updated_order_payment_status: newPaymentStatus }
+        });
+    } catch (error) {
+        console.error('Record Payment Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to record payment', error: error.message });
+    }
+};
+
+// ─── GET ORDER PAYMENTS ──────────────────────────────────────────────────────
+exports.getOrderPayments = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+
+        const payments = await prisma.payment.findMany({
+            where: { order_id: parseInt(orderId) },
+            orderBy: { transaction_date: 'desc' },
+            include: {
+                marked_by: { select: { id: true, name: true } }
+            }
+        });
+
+        res.status(200).json({ success: true, data: payments });
+    } catch (error) {
+        console.error('Get Payments Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch payments', error: error.message });
     }
 };
 

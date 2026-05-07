@@ -60,6 +60,102 @@ router.patch('/nfc-templates/:id/recommendation',
 );
 
 /**
+ * CARD TEMPLATE ROUTES
+ */
+const cardTemplateController = require('../controllers/admin/cardTemplateController');
+
+router.get('/card-templates',
+    verifyToken,
+    authorizeRole('admin'),
+    cardTemplateController.getAllCardTemplates
+);
+
+router.get('/card-templates/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    cardTemplateController.getCardTemplateById
+);
+
+router.post('/card-templates',
+    verifyToken,
+    authorizeRole('admin'),
+    setUploadFolder('card_templates'),
+    uploadImage.array('images', 10),
+    cardTemplateController.createCardTemplate
+);
+
+router.put('/card-templates/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    setUploadFolder('card_templates'),
+    uploadImage.array('images', 10),
+    cardTemplateController.updateCardTemplate
+);
+
+router.delete('/card-templates/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    cardTemplateController.deleteCardTemplate
+);
+
+router.patch('/card-templates/:id/status',
+    verifyToken,
+    authorizeRole('admin'),
+    cardTemplateController.updateCardTemplateStatus
+);
+
+router.patch('/card-templates/:id/recommendation',
+    verifyToken,
+    authorizeRole('admin'),
+    cardTemplateController.updateCardTemplateRecommendation
+);
+
+/**
+ * EVENT CATEGORY ROUTES
+ */
+const categoryController = require('../controllers/admin/categoryController');
+
+router.get('/categories',
+    verifyToken,
+    authorizeRole('admin'),
+    categoryController.getAllCategories
+);
+
+router.get('/categories/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    categoryController.getCategoryById
+);
+
+router.post('/categories',
+    verifyToken,
+    authorizeRole('admin'),
+    setUploadFolder('event_categories'),
+    uploadImage.single('icon'),
+    categoryController.createCategory
+);
+
+router.put('/categories/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    setUploadFolder('event_categories'),
+    uploadImage.single('icon'),
+    categoryController.updateCategory
+);
+
+router.delete('/categories/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    categoryController.deleteCategory
+);
+
+router.patch('/categories/:id/status',
+    verifyToken,
+    authorizeRole('admin'),
+    categoryController.updateCategoryStatus
+);
+
+/**
  * CONFIGURATION MANAGEMENT ROUTES
  */
 
@@ -83,6 +179,52 @@ router.get('/users',
     verifyToken,
     authorizeRole('admin'),
     adminUserController.getAllUsers
+);
+
+router.get('/users/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    adminUserController.getUserById
+);
+
+router.patch('/users/:id/status',
+    verifyToken,
+    authorizeRole('admin'),
+    adminUserController.updateUserStatus
+);
+
+router.delete('/users/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    adminUserController.deleteUser
+);
+
+/**
+ * TICKET MANAGEMENT ROUTES
+ */
+
+router.get('/tickets',
+    verifyToken,
+    authorizeRole('admin'),
+    adminUserController.getAllTickets
+);
+
+router.get('/tickets/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    adminUserController.getTicketById
+);
+
+router.post('/tickets',
+    verifyToken,
+    authorizeRole('admin'),
+    adminUserController.createTicket
+);
+
+router.put('/tickets/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    adminUserController.updateTicket
 );
 
 /**
@@ -172,6 +314,18 @@ router.get('/orders',
     orderWorkflowController.getAllOrders
 );
 
+router.get('/orders/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    orderWorkflowController.getOrderById
+);
+
+router.patch('/orders/:id/status',
+    verifyToken,
+    authorizeRole('admin'),
+    orderWorkflowController.updateOrderStatus
+);
+
 router.get('/tracking-notes',
     verifyToken,
     authorizeRole('admin'),
@@ -200,6 +354,22 @@ router.get('/orders/:orderId/tracking-notes',
     verifyToken,
     authorizeRole('admin'),
     orderWorkflowController.getOrderTrackingNotes
+);
+
+/**
+ * PAYMENT ROUTES
+ */
+
+router.post('/payments',
+    verifyToken,
+    authorizeRole('admin'),
+    orderWorkflowController.recordPayment
+);
+
+router.get('/orders/:orderId/payments',
+    verifyToken,
+    authorizeRole('admin'),
+    orderWorkflowController.getOrderPayments
 );
 
 module.exports = router;

@@ -983,28 +983,23 @@ exports.getPlans = async (req, res) => {
     }
 };
 
+// --- GET NFC TEMPLATES ---
 exports.getNFCTemplates = async (req, res) => {
     try {
         const templates = await prisma.nfcTemplate.findMany({
-            where: { status: 'active' },
-            include: {
-                categories: {
-                    include: { event_category: { select: { id: true, name: true, slug: true } } }
-                }
-            },
-            orderBy: [{ is_recommended: 'desc' }, { created_at: 'desc' }]
+            where: { status: 'active' }
         });
 
-        const normalized = templates.map(t => ({
-            ...t,
-            dimensions: t.width_mm && t.height_mm ? `${t.width_mm} x ${t.height_mm}mm` : '85 x 54mm',
-            categories: t.categories.map(c => c.event_category)
-        }));
-
-        res.status(200).json({ success: true, data: normalized });
+        res.status(200).json({
+            success: true,
+            data: templates
+        });
     } catch (error) {
-        console.error('Get NFC Templates Error:', error);
-        res.status(500).json({ success: false, message: 'Failed to fetch NFC templates' });
+        console.error("Get NFC Templates Error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch NFC templates"
+        });
     }
 };
 
@@ -1012,7 +1007,7 @@ exports.getNFCTemplates = async (req, res) => {
 exports.getNormalTemplates = async (req, res) => {
     try {
         const templates = await prisma.normalCardTemplate.findMany({
-            where: { is_active: true }
+            where: { status: 'active' }
         });
 
         res.status(200).json({
@@ -1032,7 +1027,7 @@ exports.getNormalTemplates = async (req, res) => {
 exports.getEventCategories = async (req, res) => {
     try {
         const categories = await prisma.eventCategory.findMany({
-            where: { is_active: true }
+            where: { status: 'active' }
         });
 
         res.status(200).json({
