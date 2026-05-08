@@ -201,7 +201,8 @@ exports.getEventCategoryById = async (req, res) => {
 exports.getActivePostPurchaseProducts = async (req, res) => {
     try {
         const products = await prisma.postPurchaseProduct.findMany({
-            where: { is_active: true },
+            where: { status: 'active' },
+            include: { category: { select: { id: true, name: true, slug: true } } },
             orderBy: { created_at: 'desc' }
         });
 

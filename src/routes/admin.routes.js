@@ -8,6 +8,8 @@ const orderWorkflowController = require('../controllers/admin/orderWorkflowContr
 const adminUserController = require('../controllers/admin/adminUserController');
 const configController = require('../controllers/admin/configController');
 const nfcTemplateController = require('../controllers/admin/nfcTemplateController');
+const postPurchaseController = require('../controllers/admin/postPurchaseController');
+const subscriptionController = require('../controllers/admin/subscriptionController');
 
 /**
  * NFC TEMPLATE ROUTES
@@ -370,6 +372,180 @@ router.get('/orders/:orderId/payments',
     verifyToken,
     authorizeRole('admin'),
     orderWorkflowController.getOrderPayments
+);
+
+/**
+ * POST-PURCHASE CATEGORY ROUTES
+ */
+
+router.get('/pp-categories',
+    verifyToken,
+    authorizeRole('admin'),
+    postPurchaseController.getAllPPCategories
+);
+
+router.get('/pp-categories/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    postPurchaseController.getPPCategoryById
+);
+
+router.post('/pp-categories',
+    verifyToken,
+    authorizeRole('admin'),
+    setUploadFolder('event_categories'),
+    uploadImage.single('icon'),
+    postPurchaseController.createPPCategory
+);
+
+router.put('/pp-categories/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    setUploadFolder('event_categories'),
+    uploadImage.single('icon'),
+    postPurchaseController.updatePPCategory
+);
+
+router.patch('/pp-categories/:id/status',
+    verifyToken,
+    authorizeRole('admin'),
+    postPurchaseController.updatePPCategoryStatus
+);
+
+router.delete('/pp-categories/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    postPurchaseController.deletePPCategory
+);
+
+/**
+ * POST-PURCHASE PRODUCT ROUTES
+ */
+
+router.get('/pp-products',
+    verifyToken,
+    authorizeRole('admin'),
+    postPurchaseController.getAllPPProducts
+);
+
+router.get('/pp-products/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    postPurchaseController.getPPProductById
+);
+
+router.post('/pp-products',
+    verifyToken,
+    authorizeRole('admin'),
+    setUploadFolder('post_purchase'),
+    uploadImage.array('images', 5),
+    postPurchaseController.createPPProduct
+);
+
+router.put('/pp-products/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    setUploadFolder('post_purchase'),
+    uploadImage.array('images', 5),
+    postPurchaseController.updatePPProduct
+);
+
+router.patch('/pp-products/:id/status',
+    verifyToken,
+    authorizeRole('admin'),
+    postPurchaseController.updatePPProductStatus
+);
+
+router.patch('/pp-products/:id/recommendation',
+    verifyToken,
+    authorizeRole('admin'),
+    postPurchaseController.updatePPProductRecommendation
+);
+
+router.delete('/pp-products/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    postPurchaseController.deletePPProduct
+);
+
+/**
+ * SUBSCRIPTION PLAN ROUTES
+ */
+
+router.get('/subscription-plans',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.getAllSubscriptionPlans
+);
+
+router.get('/subscription-plans/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.getSubscriptionPlanById
+);
+
+router.post('/subscription-plans',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.createSubscriptionPlan
+);
+
+router.put('/subscription-plans/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.updateSubscriptionPlan
+);
+
+router.patch('/subscription-plans/:id/status',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.updateSubscriptionPlanStatus
+);
+
+router.delete('/subscription-plans/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.deleteSubscriptionPlan
+);
+
+/**
+ * USER SUBSCRIPTION ROUTES
+ */
+
+router.get('/subscriptions',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.getAllUserSubscriptions
+);
+
+router.post('/subscriptions/assign',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.assignSubscription
+);
+
+router.patch('/subscriptions/:id/status',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.updateSubscriptionStatus
+);
+
+router.post('/subscription-payments',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.recordSubscriptionPayment
+);
+
+router.get('/subscriptions/:subscription_id/payments',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.getSubscriptionPayments
+);
+
+router.get('/expired-subscriptions',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.getExpiredSubscriptions
 );
 
 module.exports = router;

@@ -80,31 +80,33 @@ enum SubscriptionStatus {
 enum PlanStatus {
   active
   inactive
+  archived
+}
+
+enum SubPlanStatus {
+  active
+  inactive
+  archived
 }
 
 // --- TABLES ---
 
 model ProductPlan {
-  id                  Int      @id @default(autoincrement())
-  name                String
-  description         String   @db.Text
-  base_price          Decimal  @db.Decimal(10, 2)
-  is_recommended      Boolean  @default(false)
-  min_nfc_qty         Int      @default(0)
-  min_normal_qty      Int      @default(0)
-  // features JSON format: {
-  //   "qr_code": true|false,
-  //   "website": "basic"|"premium"|"not available",
-  //   "reminder": "basic"|"special"|"not available",
-  //   "accommodation": true|false (default: false),
-  //   "other_features": [{"feature_1": "", "feature_2": "", ...}]
-  // }
-  features            Json
-  icon_url            String?
-  status              PlanStatus @default(active)
-  created_at          DateTime  @default(now())
-  updated_at          DateTime  @updatedAt
-  orders              Order[]
+  id                           Int               @id @default(autoincrement())
+  name                         String
+  description                  String            @db.Text
+  base_price                   Decimal           @db.Decimal(10, 2)
+  is_recommended               Boolean           @default(false)
+  min_nfc_qty                  Int               @default(0)
+  min_normal_qty               Int               @default(0)
+  features                     Json
+  icon_url                     String?
+  status                       PlanStatus        @default(active)
+  included_subscription_plan   SubscriptionPlan? @relation("PlanIncludedSub", fields: [included_subscription_plan_id], references: [id], onDelete: SetNull)
+  included_subscription_plan_id Int?
+  created_at                   DateTime          @default(now())
+  updated_at                   DateTime          @updatedAt
+  orders                       Order[]
 }
 
 model EventCategory {
@@ -193,6 +195,7 @@ model User {
   tickets             Ticket[]           @relation("TicketUser")
   tickets_created     Ticket[]           @relation("TicketCreator")
   payments_marked     Payment[]          @relation("PaymentMarkedBy")
+  assigned_subscriptions UserSubscription[] @relation("SubAssignedBy")
 }
 
 model Ticket {
@@ -291,39 +294,105 @@ model OrderItem {
 }
 
 model SubscriptionPlan {
-  id                      Int      @id @default(autoincrement())
+  id                      Int                  @id @default(autoincrement())
   name                    String
-  description             String   @db.Text
-  price                   Decimal  @db.Decimal(10, 2)
+  description             String?              @db.Text
+  price                   Decimal              @db.Decimal(10, 2)
   duration_days           Int
-  default_reminder_config Json
-  is_active               Boolean  @default(true)
+  features                Json?                // JSON: { reminders: true, website: true, product_discounts: true, support: true, ... }
+  default_reminder_config Json?
+  status                  SubPlanStatus        @default(active)
+  created_at              DateTime             @default(now())
+  updated_at              DateTime             @updatedAt
   user_subscriptions      UserSubscription[]
+  product_plans           ProductPlan[]        @relation("PlanIncludedSub")
+  payments                SubscriptionPayment[]
+  expired_records         ExpiredSubscription[]
 }
 
 model UserSubscription {
-  id                  Int                @id @default(autoincrement())
-  user                User               @relation(fields: [user_id], references: [id])
-  user_id             Int
-  plan                SubscriptionPlan   @relation(fields: [subscription_plan_id], references: [id])
+  id                   Int                @id @default(autoincrement())
+  user                 User               @relation(fields: [user_id], references: [id])
+  user_id              Int
+  plan                 SubscriptionPlan   @relation(fields: [subscription_plan_id], references: [id])
   subscription_plan_id Int
-  order               Order              @relation(fields: [order_id], references: [id])
-  order_id            Int
-  start_date          DateTime
-  expiry_date         DateTime
-  status              SubscriptionStatus @default(ACTIVE)
-  reminder_config     Json
-  anniversary_date    DateTime?
+  order                Order?             @relation(fields: [order_id], references: [id])
+  order_id             Int?
+  start_date           DateTime
+  expiry_date          DateTime
+  status               SubscriptionStatus @default(ACTIVE)
+  reminder_config      Json?
+  anniversary_date     DateTime?
+  reminder_7d_sent     Boolean            @default(false)
+  reminder_3d_sent     Boolean            @default(false)
+  reminder_0d_sent     Boolean            @default(false)
+  assigned_by_id       Int?               // Admin who manually assigned
+  assigned_by          User?              @relation("SubAssignedBy", fields: [assigned_by_id], references: [id])
+  created_at           DateTime           @default(now())
+  updated_at           DateTime           @updatedAt
+  payments             SubscriptionPayment[]
+}
+
+model ExpiredSubscription {
+  id                   Int              @id @default(autoincrement())
+  user_id              Int
+  subscription_plan_id Int
+  plan                 SubscriptionPlan @relation(fields: [subscription_plan_id], references: [id])
+  plan_name            String
+  start_date           DateTime
+  expiry_date          DateTime
+  duration_days        Int
+  price_paid           Decimal          @db.Decimal(10, 2)
+  order_id             Int?
+  expired_at           DateTime         @default(now())
+}
+
+model SubscriptionPayment {
+  id                   Int              @id @default(autoincrement())
+  subscription         UserSubscription? @relation(fields: [subscription_id], references: [id], onDelete: SetNull)
+  subscription_id      Int?
+  plan                 SubscriptionPlan @relation(fields: [subscription_plan_id], references: [id])
+  subscription_plan_id Int
+  user_id              Int
+  amount               Decimal          @db.Decimal(10, 2)
+  transaction_id       String?          // Razorpay / manual reference
+  mode                 PaymentMode      @default(online)
+  payment_note         String?          @db.Text
+  status               PaymentStatus    @default(Pending)
+  transaction_date     DateTime
+  marked_by_id         Int?             // Admin who recorded this
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @updatedAt
+}
+
+model PostPurchaseCategory {
+  id                  Int                       @id @default(autoincrement())
+  name                String
+  slug                String                    @unique
+  icon_url            String?
+  parent              PostPurchaseCategory?     @relation("PPCatParent", fields: [parent_id], references: [id], onDelete: SetNull)
+  parent_id           Int?
+  children            PostPurchaseCategory[]    @relation("PPCatParent")
+  status              CategoryStatus            @default(active)
+  created_at          DateTime                  @default(now())
+  updated_at          DateTime                  @updatedAt
+  products            PostPurchaseProduct[]
 }
 
 model PostPurchaseProduct {
-  id                  Int      @id @default(autoincrement())
+  id                  Int                       @id @default(autoincrement())
   name                String
-  description         String   @db.Text
-  images              Json
-  price               Decimal  @db.Decimal(10, 2)
-  is_active           Boolean  @default(true)
+  description         String?                   @db.Text
+  images              Json?
+  price               Decimal                   @db.Decimal(10, 2)
+  discount_percent    Decimal?                  @db.Decimal(5, 2)
   stock_quantity      Int?
+  status              CardTemplateStatus        @default(active)
+  is_recommended      Boolean                   @default(false)
+  category            PostPurchaseCategory?     @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  category_id         Int?
+  created_at          DateTime                  @default(now())
+  updated_at          DateTime                  @updatedAt
 }
 
 model SiteContent {

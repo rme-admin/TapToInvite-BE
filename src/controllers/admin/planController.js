@@ -24,6 +24,9 @@ exports.getAllPlans = async (req, res) => {
                 status: true,
                 min_nfc_qty: true,
                 min_normal_qty: true,
+                included_subscription_plan: {
+                    select: { id: true, name: true, duration_days: true, price: true }
+                },
                 created_at: true,
                 updated_at: true,
                 _count: {
@@ -119,6 +122,9 @@ exports.getPlanById = async (req, res) => {
                         total_amount: true,
                         created_at: true
                     }
+                },
+                included_subscription_plan: {
+                    select: { id: true, name: true, duration_days: true, price: true }
                 }
             }
         });
@@ -252,8 +258,10 @@ exports.createPlan = async (req, res) => {
                 icon_url: icon_url,
                 min_nfc_qty: parseInt(min_nfc_qty) || 0,
                 min_normal_qty: parseInt(min_normal_qty) || 0,
-                status: status || 'active'
-            }
+                status: status || 'active',
+                included_subscription_plan_id: req.body.included_subscription_plan_id ? parseInt(req.body.included_subscription_plan_id) : null
+            },
+            include: { included_subscription_plan: { select: { id: true, name: true } } }
         });
 
         res.status(201).json({
@@ -355,8 +363,12 @@ exports.updatePlan = async (req, res) => {
                 ...(icon_url !== undefined && { icon_url }),
                 ...(min_nfc_qty !== undefined && { min_nfc_qty: parseInt(min_nfc_qty) }),
                 ...(min_normal_qty !== undefined && { min_normal_qty: parseInt(min_normal_qty) }),
-                ...(status && { status })
-            }
+                ...(status && { status }),
+                ...(req.body.included_subscription_plan_id !== undefined && { 
+                    included_subscription_plan_id: req.body.included_subscription_plan_id ? parseInt(req.body.included_subscription_plan_id) : null 
+                })
+            },
+            include: { included_subscription_plan: { select: { id: true, name: true } } }
         });
 
         res.status(200).json({
@@ -394,12 +406,8 @@ exports.deletePlan = async (req, res) => {
             });
         }
 
-        // Check if plan exists
         const existingPlan = await prisma.productPlan.findUnique({
-            where: { id: parseInt(id) },
-            include: {
-                orders: true
-            }
+            where: { id: parseInt(id) }
         });
 
         if (!existingPlan) {
@@ -409,36 +417,21 @@ exports.deletePlan = async (req, res) => {
             });
         }
 
-        // Check if plan has associated orders
-        if (existingPlan.orders.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Cannot delete plan with associated orders. Mark as inactive instead.'
-            });
-        }
-
-        // Delete icon file if exists
-        if (existingPlan.icon_url) {
-            const filePath = path.join(__dirname, '../../public', existingPlan.icon_url);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-        }
-
-        // Delete plan
-        await prisma.productPlan.delete({
-            where: { id: parseInt(id) }
+        // Soft delete — set status to archived
+        await prisma.productPlan.update({
+            where: { id: parseInt(id) },
+            data: { status: 'archived' }
         });
 
         res.status(200).json({
             success: true,
-            message: 'Plan deleted successfully'
+            message: 'Plan archived successfully'
         });
     } catch (error) {
-        console.error('Error deleting plan:', error);
+        console.error('Error archiving plan:', error);
         res.status(500).json({
             success: false,
-            message: 'Error deleting plan',
+            message: 'Error archiving plan',
             error: error.message
         });
     }
