@@ -135,12 +135,19 @@ exports.updateNfcTemplate = async (req, res) => {
         if (status !== undefined) updateData.status = status;
         if (is_recommended !== undefined) updateData.is_recommended = is_recommended === 'true' || is_recommended === true;
 
-        // Handle new uploaded images
+        // Handle images
+        let finalImages = [];
+        if (req.body.existingImages !== undefined) {
+            finalImages = JSON.parse(req.body.existingImages);
+        } else {
+            finalImages = Array.isArray(existing.images) ? existing.images : [];
+        }
+
         if (req.files?.length > 0) {
             const newImages = req.files.map(file => `/uploads/nfc_templates/${file.filename}`);
-            const existingImages = Array.isArray(existing.images) ? existing.images : [];
-            updateData.images = [...existingImages, ...newImages];
+            finalImages = [...finalImages, ...newImages];
         }
+        updateData.images = finalImages;
 
         // Handle category changes
         if (categoryIds !== undefined) {

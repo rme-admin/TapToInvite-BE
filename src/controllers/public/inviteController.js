@@ -8,20 +8,20 @@ const buildInvitePayload = (issuance, frontendUrl) => {
 
     const features = {
         calendar: {
-            enabled: Boolean(issuance.calendar_url),
+            enabled: Boolean(issuance.calendar_enabled && issuance.calendar_url),
             url: issuance.calendar_url || null,
         },
         location: {
-            enabled: Boolean(issuance.location_url),
+            enabled: Boolean(issuance.location_enabled && issuance.location_url),
             url: issuance.location_url || null,
         },
         digitalInvitation: {
-            enabled: Boolean(issuance.digital_invitation_content),
+            enabled: Boolean(issuance.digital_invitation_enabled && issuance.digital_invitation_content),
             type: issuance.digital_invitation_type || null,
             content: issuance.digital_invitation_content || null,
         },
         website: {
-            enabled: Boolean(issuance.website_url),
+            enabled: Boolean(issuance.website_enabled && issuance.website_url),
             url: issuance.website_url || null,
         },
     };

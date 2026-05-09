@@ -19,7 +19,11 @@ exports.createNFCCardIssuance = async (req, res) => {
             digitalInvitationType,
             digitalInvitationContent,
             websiteUrl,
+            websiteEnabled = true,
             googleCalendarLink,
+            calendarEnabled = true,
+            locationEnabled = true,
+            digitalInvitationEnabled = true,
             status = 'registered',
         } = req.body;
 
@@ -48,10 +52,14 @@ exports.createNFCCardIssuance = async (req, res) => {
                 generated_url: generatedUrl,
                 method: String(method),
                 calendar_url: calendarUrl || null,
+                calendar_enabled: Boolean(calendarEnabled),
                 location_url: locationUrl || null,
+                location_enabled: Boolean(locationEnabled),
                 digital_invitation_type: digitalInvitationType || null,
                 digital_invitation_content: digitalInvitationContent || null,
+                digital_invitation_enabled: Boolean(digitalInvitationEnabled),
                 website_url: websiteUrl || null,
+                website_enabled: Boolean(websiteEnabled),
                 google_calendar_link: googleCalendarLink || null,
                 status: String(status),
             },
@@ -90,6 +98,89 @@ exports.getOrderNFCCardIssuances = async (req, res) => {
     } catch (error) {
         console.error('Get NFC Issuances Error:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch NFC issuances', error: error.message });
+    }
+};
+
+exports.getAllNFCCardIssuances = async (req, res) => {
+    try {
+        const issuances = await prisma.nFCCardIssuance.findMany({
+            include: {
+                order: {
+                    select: {
+                        id: true,
+                        order_number: true,
+                        event_title: true,
+                        user: { select: { name: true, email: true } }
+                    }
+                }
+            },
+            orderBy: { created_at: 'desc' },
+        });
+
+        res.status(200).json({ success: true, data: issuances });
+    } catch (error) {
+        console.error('Get All NFC Issuances Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch NFC issuances', error: error.message });
+    }
+};
+
+exports.updateNFCCardIssuance = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            nfcCardNumber,
+            method,
+            calendarUrl,
+            calendarEnabled,
+            locationUrl,
+            locationEnabled,
+            digitalInvitationType,
+            digitalInvitationContent,
+            digitalInvitationEnabled,
+            websiteUrl,
+            websiteEnabled,
+            googleCalendarLink,
+            status,
+        } = req.body;
+
+        const issuance = await prisma.nFCCardIssuance.findUnique({ where: { id: parseInt(id) } });
+        if (!issuance) return res.status(404).json({ success: false, message: 'NFC issuance not found.' });
+
+        const updateData = {};
+        if (nfcCardNumber !== undefined) updateData.nfc_card_number = String(nfcCardNumber).trim();
+        if (method !== undefined) updateData.method = String(method);
+        if (calendarUrl !== undefined) updateData.calendar_url = calendarUrl || null;
+        if (calendarEnabled !== undefined) updateData.calendar_enabled = Boolean(calendarEnabled);
+        if (locationUrl !== undefined) updateData.location_url = locationUrl || null;
+        if (locationEnabled !== undefined) updateData.location_enabled = Boolean(locationEnabled);
+        if (digitalInvitationType !== undefined) updateData.digital_invitation_type = digitalInvitationType || null;
+        if (digitalInvitationContent !== undefined) updateData.digital_invitation_content = digitalInvitationContent || null;
+        if (digitalInvitationEnabled !== undefined) updateData.digital_invitation_enabled = Boolean(digitalInvitationEnabled);
+        if (websiteUrl !== undefined) updateData.website_url = websiteUrl || null;
+        if (websiteEnabled !== undefined) updateData.website_enabled = Boolean(websiteEnabled);
+        if (googleCalendarLink !== undefined) updateData.google_calendar_link = googleCalendarLink || null;
+        if (status !== undefined) updateData.status = String(status);
+
+        const updated = await prisma.nFCCardIssuance.update({
+            where: { id: parseInt(id) },
+            data: updateData,
+        });
+
+        res.status(200).json({ success: true, message: 'NFC issuance updated successfully', data: updated });
+    } catch (error) {
+        console.error('Update NFC Issuance Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to update NFC card issuance', error: error.message });
+    }
+};
+
+exports.deleteNFCCardIssuance = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.nFCCardIssuance.delete({ where: { id: parseInt(id) } });
+        res.status(200).json({ success: true, message: 'NFC issuance deleted successfully' });
+    } catch (error) {
+        console.error('Delete NFC Issuance Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to delete NFC card issuance', error: error.message });
     }
 };
 

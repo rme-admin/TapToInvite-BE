@@ -57,6 +57,7 @@ enum OrderStatus {
   Team_Contacted
   Designing
   Printing
+  Ready_to_be_shipped
   Shipped
   Delivered
 }
@@ -425,10 +426,14 @@ model NFCCardIssuance {
   generated_url           String   @unique
   method                  String   @default("taptoinvite_site")
   calendar_url            String?  @db.Text
+  calendar_enabled        Boolean  @default(true)
   location_url            String?  @db.Text
+  location_enabled        Boolean  @default(true)
   digital_invitation_type String?
   digital_invitation_content String? @db.LongText
+  digital_invitation_enabled Boolean @default(true)
   website_url             String?  @db.Text
+  website_enabled         Boolean  @default(true)
   google_calendar_link    String?   @db.Text
   status                  String   @default("registered")
   created_at              DateTime @default(now())

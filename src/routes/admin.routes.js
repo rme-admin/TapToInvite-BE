@@ -346,6 +346,24 @@ router.get('/orders/:orderId/nfc-issuances',
     orderWorkflowController.getOrderNFCCardIssuances
 );
 
+router.get('/nfc-issuances',
+    verifyToken,
+    authorizeRole('admin'),
+    orderWorkflowController.getAllNFCCardIssuances
+);
+
+router.put('/nfc-issuances/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    orderWorkflowController.updateNFCCardIssuance
+);
+
+router.delete('/nfc-issuances/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    orderWorkflowController.deleteNFCCardIssuance
+);
+
 router.post('/orders/:orderId/tracking-notes',
     verifyToken,
     authorizeRole('admin'),

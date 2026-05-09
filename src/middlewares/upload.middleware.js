@@ -15,6 +15,7 @@ const SUBDIRS = {
     plan_icons: path.join(UPLOAD_DIR, 'plan_icons'),
     profile_images: path.join(UPLOAD_DIR, 'profile_images'),
     order_documents: path.join(UPLOAD_DIR, 'order_documents'),
+    post_purchase: path.join(UPLOAD_DIR, 'post_purchase'),
 };
 
 /**
