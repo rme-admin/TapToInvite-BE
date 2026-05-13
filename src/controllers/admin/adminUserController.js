@@ -1,17 +1,29 @@
 const prisma = require('../../config/db');
 
-// ─── LIST ALL USERS ──────────────────────────────────────────────────────────
+// ─── LIST ALL USERS / SEARCH USERS ──────────────────────────────────────────
 exports.getAllUsers = async (req, res) => {
     try {
+        const { search } = req.query;
+        const where = { status: { not: 'archived' } };
+
+        if (search) {
+            where.OR = [
+                { name: { contains: search } },
+                { email: { contains: search } },
+                { phone: { contains: search } }
+            ];
+        }
+
         const users = await prisma.user.findMany({
-            where: { status: { not: 'archived' } },
+            where,
             include: {
                 details: true,
                 _count: {
                     select: { orders: true, tickets: true }
                 }
             },
-            orderBy: { created_at: 'desc' }
+            orderBy: { created_at: 'desc' },
+            take: search ? 50 : 100 // limit results for speed
         });
 
         const normalizedUsers = users.map(user => ({
@@ -32,6 +44,40 @@ exports.getAllUsers = async (req, res) => {
     } catch (error) {
         console.error('Get All Users Error:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch users', error: error.message });
+    }
+};
+
+// ─── QUICK USER SEARCH FOR ASSIGN FLOWS ─────────────────────────────────────
+exports.searchUsers = async (req, res) => {
+    try {
+        const { query } = req.query;
+        if (!query || query.length < 2) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        const users = await prisma.user.findMany({
+            where: {
+                status: { not: 'archived' },
+                OR: [
+                    { name: { contains: query } },
+                    { email: { contains: query } },
+                    { phone: { contains: query } }
+                ]
+            },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                country_code: true
+            },
+            take: 10
+        });
+
+        res.status(200).json({ success: true, data: users });
+    } catch (error) {
+        console.error('Search Users Error:', error);
+        res.status(500).json({ success: false, message: 'Search failed' });
     }
 };
 

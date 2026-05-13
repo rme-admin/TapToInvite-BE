@@ -60,10 +60,18 @@ router.get('/event-categories', templatesController.getActiveEventCategories);
 router.get('/event-categories/:id', templatesController.getEventCategoryById);
 
 // --- Post-Purchase Products (for guest experience)
+router.get('/products', templatesController.getActivePostPurchaseProducts);
+router.get('/products/:id', templatesController.getPostPurchaseProductById);
+router.get('/product-categories', templatesController.getActiveProductCategories);
+// Legacy aliases
 router.get('/post-purchase-products', templatesController.getActivePostPurchaseProducts);
 router.get('/post-purchase-products/:id', templatesController.getPostPurchaseProductById);
 
 // --- Public invitation page by generated key
 router.get('/invite/:key', inviteController.getPublicInviteByKey);
+
+// --- Leads / Custom Plan Requests
+const leadController = require('../controllers/public/leadController');
+router.post('/custom-plan-request', leadController.createCustomPlanRequest);
 
 module.exports = router;

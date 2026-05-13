@@ -200,22 +200,64 @@ exports.getEventCategoryById = async (req, res) => {
 // --- GET ALL ACTIVE POST-PURCHASE PRODUCTS ---
 exports.getActivePostPurchaseProducts = async (req, res) => {
     try {
-        const products = await prisma.postPurchaseProduct.findMany({
-            where: { status: 'active' },
-            include: { category: { select: { id: true, name: true, slug: true } } },
-            orderBy: { created_at: 'desc' }
-        });
+        const { category_id, sort_by } = req.query;
+        const where = { status: 'active' };
+        
+        if (category_id && !isNaN(parseInt(category_id))) {
+            const catId = parseInt(category_id);
+            
+            // Check if this category has children
+            const category = await prisma.postPurchaseCategory.findUnique({
+                where: { id: catId },
+                include: { children: { select: { id: true } } }
+            });
 
-        res.status(200).json({
-            success: true,
-            data: products
+            if (category && category.children.length > 0) {
+                // Include parent and all children
+                const allIds = [catId, ...category.children.map(c => c.id)];
+                where.category_id = { in: allIds };
+            } else {
+                where.category_id = catId;
+            }
+        }
+
+        // Sorting logic
+        let orderBy = { created_at: 'desc' };
+        if (sort_by === 'price-low') orderBy = { price: 'asc' };
+        else if (sort_by === 'price-high') orderBy = { price: 'desc' };
+        else if (sort_by === 'discount') orderBy = { discount_percent: 'desc' };
+        else if (sort_by === 'recommended') orderBy = { is_recommended: 'desc' };
+
+        const products = await prisma.postPurchaseProduct.findMany({
+            where,
+            include: { category: { select: { id: true, name: true, slug: true } } },
+            orderBy
         });
+        res.status(200).json({ success: true, data: products });
     } catch (error) {
-        console.error("Get Post-Purchase Products Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch post-purchase products"
+        console.error('Get Products Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch products' });
+    }
+};
+
+// --- GET ALL ACTIVE PRODUCT CATEGORIES ---
+exports.getActiveProductCategories = async (req, res) => {
+    try {
+        const categories = await prisma.postPurchaseCategory.findMany({
+            where: { status: 'active', parent_id: null },
+            include: {
+                children: {
+                    where: { status: 'active' },
+                    select: { id: true, name: true, slug: true }
+                },
+                _count: { select: { products: true } }
+            },
+            orderBy: { name: 'asc' }
         });
+        res.status(200).json({ success: true, data: categories });
+    } catch (error) {
+        console.error('Get Product Categories Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch categories' });
     }
 };
 
@@ -223,27 +265,16 @@ exports.getActivePostPurchaseProducts = async (req, res) => {
 exports.getPostPurchaseProductById = async (req, res) => {
     try {
         const { id } = req.params;
-
-        const product = await prisma.postPurchaseProduct.findUnique({
-            where: { id: parseInt(id) }
+        const product = await prisma.postPurchaseProduct.findFirst({
+            where: { id: parseInt(id), status: 'active' },
+            include: { category: { select: { id: true, name: true, slug: true } } }
         });
-
         if (!product) {
-            return res.status(404).json({
-                success: false,
-                message: "Post-purchase product not found"
-            });
+            return res.status(404).json({ success: false, message: 'Product not found' });
         }
-
-        res.status(200).json({
-            success: true,
-            data: product
-        });
+        res.status(200).json({ success: true, data: product });
     } catch (error) {
-        console.error("Get Post-Purchase Product Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch post-purchase product"
-        });
+        console.error('Get Product Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch product' });
     }
 };

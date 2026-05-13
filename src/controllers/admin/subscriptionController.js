@@ -324,3 +324,69 @@ exports.getExpiredSubscriptions = async (req, res) => {
         res.status(500).json({ success: false, message: 'Failed to fetch history', error: error.message });
     }
 };
+
+// ─── ACTIVATE SUBSCRIPTION BY TRANSACTION ────────────────────────────────────
+exports.activateSubscriptionByTransaction = async (req, res) => {
+    try {
+        const { transaction_id, user_id, subscription_plan_id } = req.body;
+
+        if (!transaction_id || !user_id || !subscription_plan_id) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Transaction ID, User ID, and Subscription Plan ID are required.' 
+            });
+        }
+
+        // 1. Check if transaction exists in Payment table
+        const payment = await prisma.payment.findFirst({
+            where: { transaction_id: String(transaction_id) }
+        });
+
+        if (!payment) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Transaction not found in payment history.' 
+            });
+        }
+
+        // 2. Check if user exists
+        const user = await prisma.user.findUnique({ where: { id: parseInt(user_id) } });
+        if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+        // 3. Check if plan exists
+        const plan = await prisma.subscriptionPlan.findUnique({ where: { id: parseInt(subscription_plan_id) } });
+        if (!plan) return res.status(404).json({ success: false, message: 'Subscription plan not found.' });
+
+        // 4. Create/Activate subscription
+        const startDate = new Date();
+        const expiryDate = new Date();
+        expiryDate.setDate(startDate.getDate() + (plan.duration_days || 365));
+
+        const userSubscription = await prisma.userSubscription.create({
+            data: {
+                user_id: user.id,
+                subscription_plan_id: plan.id,
+                start_date: startDate,
+                expiry_date: expiryDate,
+                status: 'ACTIVE',
+                assigned_by_id: req.user.id // Admin who performed recovery
+            }
+        });
+
+        // 5. Update payment status if needed
+        await prisma.payment.update({
+            where: { id: payment.id },
+            data: { status: 'Fully_Paid', payment_note: `Subscription activated via recovery: Sub ID ${userSubscription.id}` }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Subscription activated successfully through transaction recovery.',
+            data: userSubscription
+        });
+
+    } catch (error) {
+        console.error('Activate By Transaction Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to activate subscription', error: error.message });
+    }
+};

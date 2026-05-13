@@ -127,3 +127,76 @@ exports.getMyOrders = async (req, res) => {
         res.status(500).json({ success: false, message: "Internal Server Error" });
     }
 };
+// --- GET MY SUBSCRIPTIONS ---
+exports.getMySubscriptions = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const subscriptions = await prisma.userSubscription.findMany({
+            where: { user_id: userId },
+            include: {
+                plan: {
+                    select: {
+                        id: true,
+                        name: true,
+                        description: true,
+                        type: true,
+                        validity_days: true
+                    }
+                }
+            },
+            orderBy: { created_at: 'desc' }
+        });
+
+        res.status(200).json({
+            success: true,
+            data: subscriptions
+        });
+    } catch (error) {
+        console.error("Get My Subscriptions Error:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+// --- GET SUPPORT CONTENT ---
+exports.getSupportContent = async (req, res) => {
+    try {
+        const content = await prisma.siteContent.findFirst({
+            where: { page_slug: 'support' }
+        });
+
+        if (!content) {
+            // Return default support info if not set in admin
+            return res.status(200).json({
+                success: true,
+                data: {
+                    title: "Support & Contact",
+                    content: {
+                        email: "support@taptoinvite.com",
+                        phone: "+91 98765 43210",
+                        whatsapp: "+91 98765 43210",
+                        hours: "Mon - Sat: 10:00 AM - 7:00 PM"
+                    }
+                }
+            });
+        }
+
+        let parsedContent = {};
+        try {
+            parsedContent = typeof content.content === 'string' ? JSON.parse(content.content) : content.content;
+        } catch (e) {
+            parsedContent = content.content;
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                title: content.title,
+                content: parsedContent
+            }
+        });
+    } catch (error) {
+        console.error("Get Support Content Error:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};

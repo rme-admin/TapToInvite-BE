@@ -10,6 +10,16 @@ const configController = require('../controllers/admin/configController');
 const nfcTemplateController = require('../controllers/admin/nfcTemplateController');
 const postPurchaseController = require('../controllers/admin/postPurchaseController');
 const subscriptionController = require('../controllers/admin/subscriptionController');
+const dashboardController = require('../controllers/admin/dashboardController');
+
+/**
+ * DASHBOARD ROUTES
+ */
+router.get('/dashboard/stats',
+    verifyToken,
+    authorizeRole('admin'),
+    dashboardController.getDashboardStats
+);
 
 /**
  * NFC TEMPLATE ROUTES
@@ -181,6 +191,12 @@ router.get('/users',
     verifyToken,
     authorizeRole('admin'),
     adminUserController.getAllUsers
+);
+
+router.get('/users/search',
+    verifyToken,
+    authorizeRole('admin'),
+    adminUserController.searchUsers
 );
 
 router.get('/users/:id',
@@ -542,6 +558,18 @@ router.post('/subscriptions/assign',
     subscriptionController.assignSubscription
 );
 
+router.post('/subscriptions/record-payment',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.recordSubscriptionPayment
+);
+
+router.post('/subscriptions/activate-by-transaction',
+    verifyToken,
+    authorizeRole('admin'),
+    subscriptionController.activateSubscriptionByTransaction
+);
+
 router.patch('/subscriptions/:id/status',
     verifyToken,
     authorizeRole('admin'),
@@ -564,6 +592,29 @@ router.get('/expired-subscriptions',
     verifyToken,
     authorizeRole('admin'),
     subscriptionController.getExpiredSubscriptions
+);
+
+/**
+ * CUSTOM PLAN REQUESTS (LEADS)
+ */
+const leadAdminController = require('../controllers/admin/leadAdminController');
+
+router.get('/leads/custom-plans',
+    verifyToken,
+    authorizeRole('admin'),
+    leadAdminController.getCustomPlanRequests
+);
+
+router.patch('/leads/custom-plans/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    leadAdminController.updateCustomPlanRequest
+);
+
+router.delete('/leads/custom-plans/:id',
+    verifyToken,
+    authorizeRole('admin'),
+    leadAdminController.deleteCustomPlanRequest
 );
 
 module.exports = router;

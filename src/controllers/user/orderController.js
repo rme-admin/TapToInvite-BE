@@ -542,6 +542,19 @@ exports.confirmPaidOrder = async (req, res) => {
             }
         });
 
+        // CREATE PAYMENT RECORD for the advance amount
+        await prisma.payment.create({
+            data: {
+                order_id: updatedOrder.id,
+                transaction_id: payment.razorpay_payment_id,
+                amount: existingOrder.advance_paid,
+                payment_note: 'Automated advance payment via Razorpay',
+                status: 'Advance_Paid',
+                mode: 'online',
+                transaction_date: new Date()
+            }
+        });
+
         // Send confirmation email with order details
         const emailHtml = `
             <h1>Payment Successful!</h1>
@@ -1177,3 +1190,125 @@ exports.razorpayWebhook = async (req, res) => {
         });
     }
 };
+
+// ─── BUY PRODUCT: Create Razorpay order for full price ──────────────────────
+exports.buyProduct = async (req, res) => {
+    try {
+        const { product_id, quantity } = req.body;
+        const userId = req.user?.id;
+
+        if (!product_id || !quantity || quantity < 1) {
+            return res.status(400).json({ success: false, message: 'Product ID and valid quantity are required.' });
+        }
+
+        const product = await prisma.postPurchaseProduct.findFirst({
+            where: { id: parseInt(product_id), status: 'active' }
+        });
+
+        if (!product) {
+            return res.status(404).json({ success: false, message: 'Product not found or unavailable.' });
+        }
+
+        const unitPrice = parseFloat(product.price);
+        const gst = Math.round(unitPrice * quantity * 0.18);
+        const totalAmount = (unitPrice * quantity) + gst;
+
+        // Create a Razorpay order for full amount
+        const orderNumber = `PROD-${Date.now().toString().slice(-6)}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+        const razorpayKeyId = await getConfig('razorpay_key_id');
+        const razorpayKeySecret = await getConfig('razorpay_key_secret');
+
+        if (!razorpayKeyId || !razorpayKeySecret) {
+            return res.status(503).json({ success: false, message: 'Payment gateway not configured.' });
+        }
+
+        const razorpay = new Razorpay({ key_id: razorpayKeyId, key_secret: razorpayKeySecret });
+        const razorpayOrder = await razorpay.orders.create({
+            amount: Math.round(totalAmount * 100),
+            currency: 'INR',
+            receipt: orderNumber,
+            notes: { user_id: String(userId), product_id: String(product_id), product_name: product.name }
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Product payment order created.',
+            data: {
+                orderNumber,
+                product: { id: product.id, name: product.name, price: unitPrice },
+                quantity: parseInt(quantity),
+                pricing: { unitPrice, gst, totalAmount }
+            },
+            payment: {
+                razorpay_key_id: razorpayKeyId,
+                razorpay_order_id: razorpayOrder.id,
+                amount: razorpayOrder.amount,
+                currency: razorpayOrder.currency
+            }
+        });
+    } catch (error) {
+        console.error('Buy Product Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to initiate product purchase.', error: error.message });
+    }
+};
+
+// ─── CONFIRM PRODUCT PAYMENT ─────────────────────────────────────────────────
+exports.confirmProductPayment = async (req, res) => {
+    try {
+        const { product_id, quantity, razorpay_order_id, razorpay_payment_id, razorpay_signature, order_number } = req.body;
+        const userId = req.user?.id;
+
+        // Verify signature
+        const razorpayKeySecret = await getConfig('razorpay_key_secret');
+        const expectedSig = crypto.createHmac('sha256', razorpayKeySecret)
+            .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+            .digest('hex');
+
+        if (expectedSig !== razorpay_signature) {
+            return res.status(400).json({ success: false, message: 'Invalid payment signature.' });
+        }
+
+        const product = await prisma.postPurchaseProduct.findUnique({ where: { id: parseInt(product_id) } });
+        if (!product) return res.status(404).json({ success: false, message: 'Product not found.' });
+
+        const unitPrice = parseFloat(product.price);
+        const gst = Math.round(unitPrice * quantity * 0.18);
+        const totalAmount = (unitPrice * quantity) + gst;
+
+        // Record the purchase
+        await prisma.productPurchase.create({
+            data: {
+                product_id: parseInt(product_id),
+                user_id: userId,
+                quantity: parseInt(quantity),
+                unit_price: unitPrice,
+                gst_amount: gst,
+                total_amount: totalAmount,
+                razorpay_order_id,
+                razorpay_payment_id,
+                order_number,
+                status: 'Fully_Paid'
+            }
+        });
+
+        // Send confirmation email
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
+        if (user) {
+            await trySendEmail({
+                email: user.email,
+                subject: `Purchase Confirmed — ${product.name}`,
+                message: `<h2>Thank you, ${user.name}!</h2><p>Your purchase of <strong>${product.name}</strong> (Qty: ${quantity}) worth <strong>₹${totalAmount.toLocaleString('en-IN')}</strong> has been confirmed.</p><p>Transaction ID: ${razorpay_payment_id}</p>`
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Payment confirmed. Thank you for your purchase!',
+            data: { product_name: product.name, quantity, total: totalAmount, transaction_id: razorpay_payment_id }
+        });
+    } catch (error) {
+        console.error('Confirm Product Payment Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to confirm payment.', error: error.message });
+    }
+};
+
